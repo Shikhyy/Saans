@@ -30,6 +30,7 @@
   --t-lead: clamp(1.1875rem, 1.05rem + 0.45vw, 1.4375rem);
   --t-body: clamp(1.0625rem, 1rem + 0.22vw, 1.1875rem);
   --t-small: 0.875rem;
+  --t-figure: clamp(1.75rem, 2.6vw, 2.5rem);
 
   --gutter: clamp(16px, 2.2vw, 32px);
   --read-pad: clamp(24px, 3.4vw, 56px);
@@ -489,7 +490,7 @@ html.has-motion [data-image-reveal] {
 
 .hero__aqi {
   font-family: var(--display);
-  font-size: var(--t-display);
+  font-size: var(--t-figure);
   line-height: 0.82;
 }
 
@@ -519,7 +520,7 @@ html.has-motion [data-image-reveal] {
 
 .chapter__hour {
   font-family: var(--display);
-  font-size: var(--t-display);
+  font-size: var(--t-figure);
   line-height: 0.85;
   color: var(--accent);
 }
@@ -844,7 +845,7 @@ html.has-motion [data-image-reveal] {
 
 .gauge__value {
   font-family: var(--display);
-  font-size: var(--t-display);
+  font-size: var(--t-figure);
   line-height: 0.85;
 }
 
