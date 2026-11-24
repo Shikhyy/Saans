@@ -64,22 +64,28 @@ interface just tells the story.
 
 ```mermaid
 flowchart LR
-    A["Open-Meteo: air quality + weather"] --> B["mergeSeries / groupDays"]
-    B --> C["HourPoint[] — hour, PM2.5, …"]
+    classDef saans fill:#131519,stroke:#ffae5c,color:#e9e9e6
+    A["Open-Meteo · air quality + weather"] --> B["mergeSeries · groupDays"]
+    B --> C["HourPoint[] · hour, PM2.5 …"]
     C --> D["dose · planner · indoor · ward"]
     D --> E["PlanFacts"]
-    E --> F["composePlan (engine) + Gemini (optional)"]
+    E --> F["composePlan · engine + Gemini"]
     F --> G["Plan: actions, window, impact"]
+    class A,B,C,D,E,F,G saans
 ```
 
 ### Architecture
 
 ```mermaid
 flowchart TB
+    classDef client fill:#0b0c0e,stroke:#ffae5c,color:#e9e9e6
+    classDef core fill:#131519,stroke:#3a3d44,color:#e9e9e6
+    classDef server fill:#131519,stroke:#ffae5c,color:#e9e9e6
+    classDef data fill:#131519,stroke:#3a3d44,color:#e9e9e6
     subgraph Client["Browser"]
-        UI["Screens: Hero · Chapters · Day · Home · Ward · Plan · Close"]
-        CORE["Domain core (pure TS)"]
-        SCENE["Three.js scenes: CityScene · RoomScene"]
+        UI["Screens · Hero · Chapters · Day · Home · Ward · Plan · Close"]
+        CORE["Domain core · pure TypeScript"]
+        SCENE["Three.js scenes · CityScene · RoomScene"]
     end
     subgraph Server["Hono server"]
         API["REST API /api/*"]
@@ -88,8 +94,8 @@ flowchart TB
     subgraph Data["Data + model"]
         AQ["Open-Meteo Air + Weather"]
         GEO["Open-Meteo Geocoding"]
-        GEM["Gemini (optional)"]
-        KERNEL["Exposure surface (RBF)"]
+        GEM["Gemini · optional"]
+        KERNEL["Exposure surface · RBF"]
     end
     UI --> API
     API --> AQ
@@ -104,10 +110,12 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    S["ExposureSample[] — lat, lon, hour, pm25"] --> K["Kernel regression (RBF)"]
-    K --> Q["Query — lat, lon, hour"]
-    Q --> E["ExposureEstimate { value, spread }"]
+    classDef saans fill:#131519,stroke:#ffae5c,color:#e9e9e6
+    S["ExposureSample[] · lat, lon, hour, pm25"] --> K["Kernel regression · RBF"]
+    K --> Q["Query · lat, lon, hour"]
+    Q --> E["ExposureEstimate · smoothed + spread"]
     E --> H["Heatmap strip"]
+    class S,K,Q,E,H saans
 ```
 
 ## Engineering
