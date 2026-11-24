@@ -1,3 +1,4 @@
+import type { PlanFacts } from '../../src/core/plan'
 import { planResponseSchema, type PlanResponse } from '../../src/core/schemas'
 import type { HouseholdProfile } from '../../src/core/types'
 
@@ -50,20 +51,29 @@ function systemPrompt(profile: HouseholdProfile): string {
   ].join('\n')
 }
 
+function sanitizeLabel(value: string): string {
+  return value.replace(/[\r\n\t\0]/g, ' ').trim()
+}
+
+/**
+ * Ask Gemini to phrase pre-computed `facts` into a structured household action plan, returning
+ * `null` if the upstream call fails or produces schema-invalid JSON so callers fall back cleanly.
+ */
 export async function writePlanWithModel(
   profile: HouseholdProfile,
-  facts: unknown,
+  facts: PlanFacts,
   apiKey: string,
   model: string,
 ): Promise<PlanResponse | null> {
+  const safeProfile: HouseholdProfile = { ...profile, city: sanitizeLabel(profile.city) }
   const body = {
-    systemInstruction: { parts: [{ text: systemPrompt(profile) }] },
+    systemInstruction: { parts: [{ text: systemPrompt(safeProfile) }] },
     contents: [
       {
         role: 'user',
         parts: [
           {
-            text: `Household profile:\n${JSON.stringify(profile)}\n\nComputed facts:\n${JSON.stringify(facts)}`,
+            text: `Household profile:\n${JSON.stringify(safeProfile)}\n\nComputed facts:\n${JSON.stringify(facts)}`,
           },
         ],
       },

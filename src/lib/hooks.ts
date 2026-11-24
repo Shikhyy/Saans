@@ -16,39 +16,37 @@ export function useReducedMotion(): boolean {
   return reduced
 }
 
+/** Stable default options — declared outside the hook so the reference never changes. */
+const DEFAULT_OBSERVER_OPTIONS: IntersectionObserverInit = { threshold: 0.05 }
+
+/**
+ * Track whether `ref` intersects the viewport without recreating the observer on unstable
+ * inline option object literals.
+ */
 export function useInView<T extends Element>(
-  options: IntersectionObserverInit = { threshold: 0.05 },
+  options: IntersectionObserverInit = DEFAULT_OBSERVER_OPTIONS,
 ): [React.RefObject<T | null>, boolean] {
   const ref = useRef<T | null>(null)
   const [inView, setInView] = useState(false)
+  const { root = null, rootMargin = '0px', threshold = 0.05 } = options
+  const thresholdKey = Array.isArray(threshold) ? threshold.join(',') : String(threshold)
 
   useEffect(() => {
     const element = ref.current
     if (!element) return
-    const observer = new IntersectionObserver((entries) => {
-      const entry = entries[0]
-      if (entry) setInView(entry.isIntersecting)
-    }, options)
+    const parsedThreshold = thresholdKey.includes(',')
+      ? thresholdKey.split(',').map(Number)
+      : Number(thresholdKey)
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0]
+        if (entry) setInView(entry.isIntersecting)
+      },
+      { root, rootMargin, threshold: parsedThreshold },
+    )
     observer.observe(element)
     return () => observer.disconnect()
-  }, [options])
+  }, [root, rootMargin, thresholdKey])
 
   return [ref, inView]
-}
-
-export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return window.matchMedia(query).matches
-  })
-
-  useEffect(() => {
-    const media = window.matchMedia(query)
-    const handler = (event: MediaQueryListEvent) => setMatches(event.matches)
-    media.addEventListener('change', handler)
-    setMatches(media.matches)
-    return () => media.removeEventListener('change', handler)
-  }, [query])
-
-  return matches
 }

@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { api } from '../server/app'
+import { writePlanWithModel } from '../server/lib/gemini'
 import { buildUrl, fetchJson, UpstreamError } from '../server/lib/upstream'
 import { DEFAULT_PROFILE } from '../src/state/app'
-import type { PlanFacts } from '../src/core/plan'
+import { composePlan, type PlanFacts } from '../src/core/plan'
 
 const facts: PlanFacts = {
   aqi: 300,
@@ -82,9 +83,27 @@ describe('the api surface', () => {
     ).toBe(400)
   })
 
-  it('rejects a body over the cap', async () => {
+  it('rejects a body over the cap even when chunked without content-length', async () => {
     const response = await api.fetch(post('x'.repeat(9000)))
     expect(response.status).toBe(413)
+
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('x'.repeat(5000)))
+        controller.enqueue(encoder.encode('x'.repeat(5000)))
+        controller.close()
+      },
+    })
+    const streamed = await api.fetch(
+      new Request('http://localhost/api/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: stream,
+        duplex: 'half',
+      } as RequestInit),
+    )
+    expect(streamed.status).toBe(413)
   })
 
   it('writes a plan from the engine when no model key is set', async () => {
@@ -96,5 +115,94 @@ describe('the api surface', () => {
     expect(plan.source).toBe('engine')
     expect(plan.actions.length).toBe(3)
     if (previous) process.env.GEMINI_API_KEY = previous
+  })
+
+  it('blocks untrusted cross-origin requests unless explicitly allowlisted', async () => {
+    const previous = process.env.ALLOWED_ORIGINS
+    delete process.env.ALLOWED_ORIGINS
+    const blocked = await api.fetch(
+      new Request('http://localhost/api/health', {
+        headers: { Origin: 'https://evil.example.com' },
+      }),
+    )
+    expect(blocked.status).toBe(403)
+
+    process.env.ALLOWED_ORIGINS = 'https://trusted.example.com'
+    const allowed = await api.fetch(
+      new Request('http://localhost/api/health', {
+        headers: { Origin: 'https://trusted.example.com' },
+      }),
+    )
+    expect(allowed.status).toBe(200)
+    expect(allowed.headers.get('Access-Control-Allow-Origin')).toBe('https://trusted.example.com')
+
+    if (previous === undefined) delete process.env.ALLOWED_ORIGINS
+    else process.env.ALLOWED_ORIGINS = previous
+  })
+})
+
+describe('the model writer', () => {
+  it('parses valid schema-conforming JSON returned by Gemini', async () => {
+    const engine = composePlan(facts, DEFAULT_PROFILE)
+    const modelReply = {
+      headline: engine.headline,
+      summary: engine.summary,
+      actions: engine.actions,
+      caution: engine.caution,
+    }
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            candidates: [{ content: { parts: [{ text: JSON.stringify(modelReply) }] } }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const result = await writePlanWithModel(
+        DEFAULT_PROFILE,
+        facts,
+        'test-key',
+        'gemini-2.5-flash',
+      )
+      expect(result).toEqual(modelReply)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('returns null when Gemini responds with invalid JSON or non-OK status', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('upstream error', { status: 503 })),
+    )
+    try {
+      expect(
+        await writePlanWithModel(DEFAULT_PROFILE, facts, 'test-key', 'gemini-2.5-flash'),
+      ).toBeNull()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ candidates: [{ content: { parts: [{ text: '{not valid' }] } }] }),
+            { status: 200 },
+          ),
+      ),
+    )
+    try {
+      expect(
+        await writePlanWithModel(DEFAULT_PROFILE, facts, 'test-key', 'gemini-2.5-flash'),
+      ).toBeNull()
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

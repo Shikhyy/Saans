@@ -18,7 +18,9 @@ export class TtlCache<T> {
   }
 
   set(key: string, value: T): void {
-    if (this.map.size >= this.maxEntries) {
+    if (this.map.has(key)) {
+      this.map.delete(key)
+    } else if (this.map.size >= this.maxEntries) {
       const oldest = this.map.keys().next().value
       if (oldest !== undefined) this.map.delete(oldest)
     }

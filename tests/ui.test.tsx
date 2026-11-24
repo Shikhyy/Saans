@@ -5,7 +5,10 @@ import axe from 'axe-core'
 import { AppProvider } from '../src/state/app'
 import { DayPlanner } from '../src/components/DayPlanner'
 import { Copilot } from '../src/components/Copilot'
+import { ErrorBoundary } from '../src/components/ErrorBoundary'
 import { Heatmap } from '../src/components/Heatmap'
+import { Method } from '../src/components/Method'
+import { readCachedAir } from '../src/state/storage'
 import { samplePayload } from '../src/data/sample'
 import { composePlan } from '../src/core/plan'
 import { DEFAULT_PROFILE } from '../src/state/app'
@@ -174,5 +177,46 @@ describe('accessibility', () => {
       },
     })
     expect(results.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([])
+  })
+
+  it('has valid heading order and zero axe violations on the method page', async () => {
+    const { container } = render(<Method />)
+    const results = await axe.run(container, {
+      rules: {
+        'color-contrast': { enabled: false },
+      },
+    })
+    expect(results.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([])
+  })
+})
+
+describe('resilience and storage', () => {
+  it('recovers gracefully inside ErrorBoundary when a child throws', async () => {
+    const user = userEvent.setup()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    let shouldThrow = true
+    function Bomb() {
+      if (shouldThrow) throw new Error('boom')
+      return <p>Recovered content</p>
+    }
+    const { getByRole, queryByText } = render(
+      <ErrorBoundary>
+        <Bomb />
+      </ErrorBoundary>,
+    )
+    expect(getByRole('alert')).toBeInTheDocument()
+    shouldThrow = false
+    await user.click(getByRole('button', { name: /Reload view/i }))
+    expect(queryByText('Recovered content')).toBeInTheDocument()
+    errorSpy.mockRestore()
+  })
+
+  it('ignores cached air forecasts older than 24 hours', () => {
+    const payload = samplePayload()
+    window.localStorage.setItem(
+      'saans.air.v1',
+      JSON.stringify({ at: Date.now() - 25 * 60 * 60 * 1000, payload }),
+    )
+    expect(readCachedAir()).toBeNull()
   })
 })

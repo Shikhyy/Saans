@@ -114,9 +114,9 @@ describe('ranked interventions', () => {
 
   it('offers the box-fan filter only when there is no purifier', () => {
     expect(interventions(input).some((item) => item.id === 'corsi')).toBe(true)
-    expect(
-      interventions({ ...input, purifierCadr: 300 }).some((item) => item.id === 'corsi'),
-    ).toBe(false)
+    expect(interventions({ ...input, purifierCadr: 300 }).some((item) => item.id === 'corsi')).toBe(
+      false,
+    )
   })
 
   it('offers the fuel switch only to households burning biomass', () => {
@@ -130,5 +130,11 @@ describe('ranked interventions', () => {
     const purifier = list.find((item) => item.id === 'purifier')
     expect(corsi?.costInr).toBe(CORSI_ROSENTHAL.costInr)
     expect(corsi!.costInr).toBeLessThan(purifier!.costInr)
+  })
+
+  it('localizes intervention copy into Hindi when asked', () => {
+    const list = interventions(input, 'hi')
+    expect(list[0]?.title).toMatch(/[\u0900-\u097F]/)
+    expect(list[0]?.detail).toMatch(/[\u0900-\u097F]/)
   })
 })

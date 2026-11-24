@@ -26,7 +26,7 @@ function currentPath(): string {
 }
 
 export default function App() {
-  const { language } = useApp()
+  const { language, t } = useApp()
   const reduced = useReducedMotion()
   const [path, setPath] = useState<string>(currentPath)
   const [cityOpen, setCityOpen] = useState(false)
@@ -114,7 +114,7 @@ export default function App() {
   return (
     <>
       <a className="skip" href="#main">
-        Skip to content
+        {t('common.skip')}
       </a>
 
       <Nav path={path} navigate={navigate} onOpenCity={() => setCityOpen(true)} />
@@ -122,11 +122,11 @@ export default function App() {
       {path === '/method' ? (
         <Method />
       ) : (
-        <div id="main">
+        <main id="main">
           <div className="split" id="split">
             <CityStage />
             <div className="split__read">
-              <Hero onPlan={() => scrollToId('day')} />
+              <Hero onPlan={() => scrollToId('day')} onOpenMethod={() => navigate('/method')} />
               <Chapters />
             </div>
           </div>
@@ -135,7 +135,7 @@ export default function App() {
           <WardMode />
           <Copilot />
           <Close />
-        </div>
+        </main>
       )}
 
       <Footer navigate={navigate} />

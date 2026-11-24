@@ -35,19 +35,13 @@ export const SENSITIVITY: Record<HealthProfile, number> = {
   pregnancy: 0.8,
 }
 
-export const PROFILE_LABEL: Record<HealthProfile, string> = {
-  adult: 'Adult',
-  child: 'Child',
-  elder: 'Older adult',
-  asthma: 'Asthma',
-  pregnancy: 'Pregnancy',
-}
-
+/** Compute inhaled PM2.5 mass (µg) for `minutes` spent breathing at `activity` intensity. */
 export function inhaledUg(pm25: number, minutes: number, activity: Activity): number {
   if (!Number.isFinite(pm25) || pm25 <= 0 || minutes <= 0) return 0
   return pm25 * minutes * MINUTE_VENTILATION[activity]
 }
 
+/** Compute daily reference inhaled budget (µg) scaled for a member's health sensitivity. */
 export function dailyBudget(profile: HealthProfile): number {
   return WHO_DAILY_INHALED_UG * SENSITIVITY[profile]
 }

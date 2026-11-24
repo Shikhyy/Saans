@@ -1,4 +1,4 @@
-import type { AqiCategory, AqiResult, Pollutant } from './types'
+import type { AqiCategory, AqiResult, HourPoint, Pollutant } from './types'
 
 /**
  * CPCB (India) National Air Quality Index.
@@ -10,14 +10,15 @@ import type { AqiCategory, AqiResult, Pollutant } from './types'
  * Source: CPCB, *National Air Quality Index* (2014), Table 2.
  */
 
-interface Breakpoint {
+export interface Breakpoint {
   cLow: number
   cHigh: number
   iLow: number
   iHigh: number
 }
 
-const PM25: Breakpoint[] = [
+/** CPCB 24-hour PM2.5 breakpoint table paired with official AQI category bands. */
+export const PM25_BREAKPOINTS: readonly Breakpoint[] = [
   { cLow: 0, cHigh: 30, iLow: 0, iHigh: 50 },
   { cLow: 30, cHigh: 60, iLow: 51, iHigh: 100 },
   { cLow: 60, cHigh: 90, iLow: 101, iHigh: 200 },
@@ -71,8 +72,8 @@ const CO: Breakpoint[] = [
   { cLow: 34, cHigh: 50, iLow: 401, iHigh: 500 },
 ]
 
-const TABLES: Record<Pollutant, Breakpoint[]> = {
-  pm2_5: PM25,
+const TABLES: Record<Pollutant, readonly Breakpoint[]> = {
+  pm2_5: PM25_BREAKPOINTS,
   pm10: PM10,
   no2: NO2,
   so2: SO2,
@@ -98,7 +99,7 @@ export const POLLUTANT_UNIT: Record<Pollutant, string> = {
   co: 'mg/m³',
 }
 
-function interpolate(table: Breakpoint[], concentration: number): number {
+function interpolate(table: readonly Breakpoint[], concentration: number): number {
   if (!Number.isFinite(concentration) || concentration <= 0) return 0
   const last = table[table.length - 1]
   if (!last || concentration >= last.cHigh) return 500
@@ -117,6 +118,7 @@ export function subIndex(pollutant: Pollutant, concentration: number): number {
   return Math.min(500, interpolate(TABLES[pollutant], concentration))
 }
 
+/** Map a CPCB AQI score (`0–500`) to its six official category bands. */
 export function aqiCategory(aqi: number): AqiCategory {
   if (aqi <= 50) return 'good'
   if (aqi <= 100) return 'satisfactory'
@@ -145,6 +147,10 @@ export const CATEGORY_COLOR: Record<AqiCategory, string> = {
   severe: '#6e2430',
 }
 
+/**
+ * Compute CPCB National AQI across available pollutants, returning the highest sub-index
+ * and the dominant pollutant driving it.
+ */
 export function computeAqi(
   readings: Partial<Record<Pollutant, number | null | undefined>>,
 ): AqiResult {
@@ -167,6 +173,18 @@ export function computeAqi(
 
   const aqi = worst < 0 ? 0 : worst
   return { aqi, category: aqiCategory(aqi), dominant, subIndices }
+}
+
+/** Compute CPCB AQI directly from a forecast `HourPoint`. */
+export function aqiFromPoint(point: HourPoint): AqiResult {
+  return computeAqi({
+    pm2_5: point.pm25,
+    pm10: point.pm10,
+    no2: point.no2,
+    so2: point.so2,
+    o3: point.o3,
+    co: point.co,
+  })
 }
 
 /** How many times the WHO 2021 24-hour PM2.5 guideline (15 µg/m³) a reading represents. */

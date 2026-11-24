@@ -60,6 +60,55 @@ export interface MotionOptions {
   reduced: boolean
 }
 
+function setupParallax(): gsap.Context {
+  return gsap.context(() => {
+    const wide = window.matchMedia('(min-width: 901px)').matches
+    if (!wide) return
+    gsap.utils.toArray<HTMLElement>('[data-parallax]').forEach((layer) => {
+      const rawSpeed = Number(layer.dataset.parallax ?? '0.12')
+      const speed = Number.isFinite(rawSpeed) ? rawSpeed : 0.12
+      const section = layer.closest<HTMLElement>('[data-parallax-section]') ?? layer
+      gsap.to(layer, {
+        yPercent: -speed * 100,
+        ease: 'none',
+        scrollTrigger: {
+          trigger: section,
+          start: 'top bottom',
+          end: 'bottom top',
+          scrub: 1.2,
+          invalidateOnRefresh: true,
+        },
+      })
+    })
+  })
+}
+
+function setupMagnetic(cleanups: (() => void)[]): void {
+  if (window.matchMedia('(pointer: coarse)').matches) return
+  gsap.utils.toArray<HTMLElement>('[data-magnetic]').forEach((element) => {
+    const rawStrength = Number(element.dataset.magnetic ?? '0.16')
+    const strength = Number.isFinite(rawStrength) ? rawStrength : 0.16
+    const xTo = gsap.quickTo(element, 'x', { duration: 0.45, ease: 'power3.out' })
+    const yTo = gsap.quickTo(element, 'y', { duration: 0.45, ease: 'power3.out' })
+    const move = (event: PointerEvent) => {
+      const rect = element.getBoundingClientRect()
+      xTo((event.clientX - rect.left - rect.width / 2) * strength)
+      yTo((event.clientY - rect.top - rect.height / 2) * strength)
+    }
+    const leave = () => {
+      xTo(0)
+      yTo(0)
+    }
+    element.addEventListener('pointermove', move)
+    element.addEventListener('pointerleave', leave)
+    cleanups.push(() => {
+      element.removeEventListener('pointermove', move)
+      element.removeEventListener('pointerleave', leave)
+      gsap.set(element, { x: 0, y: 0 })
+    })
+  })
+}
+
 export function initMotion({ reduced }: MotionOptions): () => void {
   const root = document.documentElement
   const targets = '[data-motion], [data-reveal], [data-reveal-item], [data-image-reveal]'
@@ -129,11 +178,7 @@ export function initMotion({ reduced }: MotionOptions): () => void {
 
   gsap.utils.toArray<HTMLElement>('[data-reveal]:not([data-reveal-item])').forEach((element) => {
     gsap.set(element, { autoAlpha: 1 })
-    const tween = gsap.fromTo(
-      element,
-      { y: 26 },
-      { y: 0, duration: 0.9, ease: EASE, paused: true },
-    )
+    const tween = gsap.fromTo(element, { y: 26 }, { y: 0, duration: 0.9, ease: EASE, paused: true })
     tweens.push(tween)
     enqueue(element, tween)
   })
@@ -160,50 +205,10 @@ export function initMotion({ reduced }: MotionOptions): () => void {
   })
 
   // 4. One moving picture: the closing plate drifts slower than the page.
-  const context = gsap.context(() => {
-    const wide = window.matchMedia('(min-width: 901px)').matches
-    if (!wide) return
-    gsap.utils.toArray<HTMLElement>('[data-parallax]').forEach((layer) => {
-      const speed = Number(layer.dataset.parallax ?? '0.12')
-      const section = layer.closest<HTMLElement>('[data-parallax-section]') ?? layer
-      gsap.to(layer, {
-        yPercent: -speed * 100,
-        ease: 'none',
-        scrollTrigger: {
-          trigger: section,
-          start: 'top bottom',
-          end: 'bottom top',
-          scrub: 1.2,
-          invalidateOnRefresh: true,
-        },
-      })
-    })
-  })
+  const context = setupParallax()
 
   // 5. Feedback: the primary action leans towards the pointer.
-  if (!window.matchMedia('(pointer: coarse)').matches) {
-    gsap.utils.toArray<HTMLElement>('[data-magnetic]').forEach((element) => {
-      const strength = Number(element.dataset.magnetic ?? '0.16')
-      const xTo = gsap.quickTo(element, 'x', { duration: 0.45, ease: 'power3.out' })
-      const yTo = gsap.quickTo(element, 'y', { duration: 0.45, ease: 'power3.out' })
-      const move = (event: PointerEvent) => {
-        const rect = element.getBoundingClientRect()
-        xTo((event.clientX - rect.left - rect.width / 2) * strength)
-        yTo((event.clientY - rect.top - rect.height / 2) * strength)
-      }
-      const leave = () => {
-        xTo(0)
-        yTo(0)
-      }
-      element.addEventListener('pointermove', move)
-      element.addEventListener('pointerleave', leave)
-      cleanups.push(() => {
-        element.removeEventListener('pointermove', move)
-        element.removeEventListener('pointerleave', leave)
-        gsap.set(element, { x: 0, y: 0 })
-      })
-    })
-  }
+  setupMagnetic(cleanups)
 
   const refresh = window.setTimeout(() => ScrollTrigger.refresh(), 180)
 

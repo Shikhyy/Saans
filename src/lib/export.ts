@@ -7,14 +7,27 @@ import { fmt } from './format'
  */
 
 function icsDate(date: string, hour: number): string {
-  const whole = Math.floor(hour)
-  const minutes = Math.round((hour - whole) * 60)
   const day = date.replace(/-/g, '')
-  return `${day}T${String(whole).padStart(2, '0')}${String(minutes).padStart(2, '0')}00`
+  return `${day}T${formatHour(hour).replace(':', '')}00`
+}
+
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 function escapeIcs(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n')
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\n/g, '\\n')
 }
 
 function fold(line: string): string {
@@ -66,12 +79,7 @@ export function buildIcs(options: IcsOptions): string {
 
 export function downloadIcs(options: IcsOptions): void {
   const blob = new Blob([buildIcs(options)], { type: 'text/calendar;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = `saans-clean-window-${options.date}.ics`
-  anchor.click()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  triggerDownload(blob, `saans-clean-window-${options.date}.ics`)
 }
 
 export interface CardOptions {
@@ -185,11 +193,6 @@ export async function shareCard(options: CardOptions): Promise<'shared' | 'downl
       return 'failed'
     }
   }
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = 'saans-plan.png'
-  anchor.click()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  triggerDownload(blob, 'saans-plan.png')
   return 'downloaded'
 }

@@ -1,4 +1,5 @@
 import { MINUTE_VENTILATION } from './dose'
+import { FUEL_ANNUAL } from './impact'
 import { modelIndoor } from './indoor'
 import { cleanestWindow, meanPm25 } from './planner'
 import type { CleanWindow, HourPoint } from './types'
@@ -10,9 +11,21 @@ import type { CleanWindow, HourPoint } from './types'
  */
 
 export const HOUSEHOLD_FUEL = {
-  biomass: { pm25KgPerYear: 4.5, co2eKgPerYear: 2250, costInrPerYear: 0 },
-  lpg: { pm25KgPerYear: 0.02, co2eKgPerYear: 492, costInrPerYear: 7200 },
-  induction: { pm25KgPerYear: 0.005, co2eKgPerYear: 390, costInrPerYear: 4500 },
+  biomass: {
+    pm25KgPerYear: 4.5,
+    co2eKgPerYear: FUEL_ANNUAL.biomass.co2eKg,
+    costInrPerYear: FUEL_ANNUAL.biomass.costInr,
+  },
+  lpg: {
+    pm25KgPerYear: 0.02,
+    co2eKgPerYear: FUEL_ANNUAL.lpg.co2eKg,
+    costInrPerYear: FUEL_ANNUAL.lpg.costInr,
+  },
+  induction: {
+    pm25KgPerYear: 0.005,
+    co2eKgPerYear: FUEL_ANNUAL.induction.co2eKg,
+    costInrPerYear: FUEL_ANNUAL.induction.costInr,
+  },
 } as const
 
 export type CleanCookingOption = 'lpg' | 'induction'
@@ -33,6 +46,7 @@ export interface WardScenario {
   peopleProtected: number
 }
 
+/** Estimate annual ward-level PM2.5, CO₂e, cost, and inhaled-exposure shifts from switching off wood. */
 export function wardScenario(
   input: WardInput,
   targetBiomassShare: number,
@@ -65,8 +79,7 @@ export function wardScenario(
   const kitchenDelta = Math.max(0, kitchenBefore - kitchenAfter)
 
   // 3 cooking hours a day at moderate activity, for every person in the household.
-  const inhaledUgPerPersonPerYear =
-    kitchenDelta * 180 * MINUTE_VENTILATION.moderate * 365
+  const inhaledUgPerPersonPerYear = kitchenDelta * 180 * MINUTE_VENTILATION.moderate * 365
 
   return {
     switchedHouseholds: switched,

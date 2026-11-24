@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, statSync } from 'node:fs'
+import { createReadStream, statSync, type Stats } from 'node:fs'
 import { createServer, type ServerResponse } from 'node:http'
 import { extname, join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -8,7 +8,8 @@ import { api } from './app'
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const dist = join(root, 'dist')
 const isProd = process.env.NODE_ENV === 'production'
-const port = Number(process.env.PORT ?? 8787)
+const rawPort = Number(process.env.PORT ?? 8787)
+const port = Number.isInteger(rawPort) && rawPort > 0 && rawPort <= 65535 ? rawPort : 8787
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -57,8 +58,28 @@ function setSecurityHeaders(res: ServerResponse): void {
   }
 }
 
-function serveStatic(res: ServerResponse, pathname: string): void {
-  const decoded = decodeURIComponent(pathname.split('?')[0] ?? '/')
+function tryStat(path: string): Stats | null {
+  try {
+    return statSync(path)
+  } catch {
+    return null
+  }
+}
+
+function serveStatic(res: ServerResponse, pathname: string, method = 'GET'): void {
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(pathname.split('?')[0] ?? '/')
+  } catch {
+    res.writeHead(400).end('Bad request')
+    return
+  }
+
+  if (decoded.includes('\0')) {
+    res.writeHead(403).end('Forbidden')
+    return
+  }
+
   const candidate = normalize(join(dist, decoded))
   if (!candidate.startsWith(dist + sep) && candidate !== dist) {
     res.writeHead(403).end('Forbidden')
@@ -66,9 +87,10 @@ function serveStatic(res: ServerResponse, pathname: string): void {
   }
 
   let file = candidate
-  if (!existsSync(file) || statSync(file).isDirectory()) {
+  const candidateStats = tryStat(file)
+  if (!candidateStats || candidateStats.isDirectory()) {
     const indexPath = join(dist, 'index.html')
-    if (!existsSync(indexPath)) {
+    if (!tryStat(indexPath)?.isFile()) {
       res.writeHead(503).end('Build not found. Run npm run build first.')
       return
     }
@@ -83,7 +105,16 @@ function serveStatic(res: ServerResponse, pathname: string): void {
     immutable ? 'public, max-age=31536000, immutable' : 'no-cache, must-revalidate',
   )
   res.writeHead(200)
-  createReadStream(file).pipe(res)
+  if (method === 'HEAD') {
+    res.end()
+    return
+  }
+  const stream = createReadStream(file)
+  stream.on('error', () => {
+    if (!res.headersSent) res.writeHead(500)
+    res.end()
+  })
+  stream.pipe(res)
 }
 
 const apiListener = getRequestListener(api.fetch)
@@ -120,7 +151,7 @@ const server = createServer((req, res) => {
     return
   }
 
-  serveStatic(res, pathname)
+  serveStatic(res, pathname, req.method ?? 'GET')
 })
 
 server.listen(port, () => {

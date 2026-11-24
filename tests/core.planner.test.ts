@@ -4,6 +4,7 @@ import {
   cleanestWindow,
   dayDose,
   DEFAULT_ROUTINES,
+  fitRoutinesInWindow,
   formatHour,
   meanPm25,
   moveRoutine,
@@ -108,6 +109,18 @@ describe('routines', () => {
       0,
     )
     expect(total).toBeCloseTo(parts, 6)
+  })
+
+  it('fits movable routines inside the clean window without shifting immovable ones', () => {
+    const clean = { startHour: 13, endHour: 15, meanPm25: 90 }
+    const fitted = fitRoutinesInWindow(DEFAULT_ROUTINES, clean)
+    const cookBefore = DEFAULT_ROUTINES.find((routine) => !routine.movable)!
+    const cookAfter = fitted.find((routine) => !routine.movable)!
+    expect(cookAfter.start).toBe(cookBefore.start)
+    for (const routine of fitted.filter((item) => item.movable)) {
+      expect(routine.start).toBeGreaterThanOrEqual(clean.startHour)
+      expect(routine.start).toBeLessThanOrEqual(clean.endHour)
+    }
   })
 })
 

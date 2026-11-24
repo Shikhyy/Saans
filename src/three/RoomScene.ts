@@ -1,38 +1,23 @@
 import * as THREE from 'three'
+import { softRadialTexture } from './textures'
 
 /**
  * The home, in cutaway. The room is a model of the mass balance in `core/indoor.ts`: turn the
  * purifier on and the particles are drawn out of the air at the CADR the household actually owns.
  */
 
-function glowTexture(): THREE.CanvasTexture {
-  const size = 64
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-  const ctx = canvas.getContext('2d')
-  if (ctx) {
-    const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
-    gradient.addColorStop(0, 'rgba(255,255,255,0.95)')
-    gradient.addColorStop(0.4, 'rgba(255,255,255,0.3)')
-    gradient.addColorStop(1, 'rgba(255,255,255,0)')
-    ctx.fillStyle = gradient
-    ctx.fillRect(0, 0, size, size)
-  }
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
-  return texture
-}
+const PURIFIER_TARGET = new THREE.Vector3(2.6, 0.7, 1.9)
 
 export class RoomScene {
   private readonly renderer: THREE.WebGLRenderer
   private readonly scene = new THREE.Scene()
   private readonly camera: THREE.PerspectiveCamera
-  private readonly particles: THREE.Points
+  private readonly particlePositions: Float32Array
+  private readonly particleAttribute: THREE.BufferAttribute
   private readonly particleMaterial: THREE.PointsMaterial
   private readonly fan: THREE.Mesh
-  private readonly led: THREE.Mesh
-  private readonly windowGlow: THREE.Mesh
+  private readonly ledMaterial: THREE.MeshBasicMaterial
+  private readonly windowMaterial: THREE.MeshBasicMaterial
   private readonly windowLight: THREE.PointLight
   private readonly disposables: (THREE.BufferGeometry | THREE.Material | THREE.Texture)[] = []
   private readonly reducedMotion: boolean
@@ -77,6 +62,26 @@ export class RoomScene {
     this.windowLight.position.set(-1.4, 2.2, -3.6)
     this.scene.add(this.windowLight)
 
+    this.windowMaterial = new THREE.MeshBasicMaterial({ color: 0xc99055 })
+    this.buildShell()
+    this.buildFurniture()
+
+    this.ledMaterial = new THREE.MeshBasicMaterial({ color: 0x2f3a33 })
+    this.fan = this.buildPurifier()
+
+    const { positions, attribute, material, points } = this.buildParticles()
+    this.particlePositions = positions
+    this.particleAttribute = attribute
+    this.particleMaterial = material
+    this.scene.add(points)
+
+    this.resizeObserver = new ResizeObserver(() => this.resize())
+    this.resizeObserver.observe(canvas)
+    this.resize()
+    this.render()
+  }
+
+  private buildShell(): void {
     const floorGeometry = new THREE.BoxGeometry(8, 0.24, 8)
     const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x2a2118, roughness: 0.9 })
     this.disposables.push(floorGeometry, floorMaterial)
@@ -95,35 +100,39 @@ export class RoomScene {
     side.position.set(-4, 2.2, 0)
     this.scene.add(side)
 
-    // window: the outside air, as a lit plane
     const windowGeometry = new THREE.PlaneGeometry(2.6, 1.8)
-    const windowMaterial = new THREE.MeshBasicMaterial({ color: 0xc99055 })
-    this.disposables.push(windowGeometry, windowMaterial)
-    this.windowGlow = new THREE.Mesh(windowGeometry, windowMaterial)
-    this.windowGlow.position.set(1.1, 2.4, -3.88)
-    this.scene.add(this.windowGlow)
+    this.disposables.push(windowGeometry, this.windowMaterial)
+    const windowGlow = new THREE.Mesh(windowGeometry, this.windowMaterial)
+    windowGlow.position.set(1.1, 2.4, -3.88)
+    this.scene.add(windowGlow)
 
     const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x0e1014, roughness: 0.8 })
-    this.disposables.push(frameMaterial)
     const barGeometry = new THREE.BoxGeometry(2.8, 0.1, 0.12)
-    this.disposables.push(barGeometry)
+    const mullionGeometry = new THREE.BoxGeometry(0.1, 2, 0.12)
+    this.disposables.push(frameMaterial, barGeometry, mullionGeometry)
     for (const y of [3.34, 2.4, 1.46]) {
       const bar = new THREE.Mesh(barGeometry, frameMaterial)
       bar.position.set(1.1, y, -3.84)
       this.scene.add(bar)
     }
-    const mullion = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2, 0.12), frameMaterial)
-    this.disposables.push(mullion.geometry)
+    const mullion = new THREE.Mesh(mullionGeometry, frameMaterial)
     mullion.position.set(1.1, 2.4, -3.84)
     this.scene.add(mullion)
+  }
 
-    // bed
+  private buildFurniture(): void {
     const bedMaterial = new THREE.MeshStandardMaterial({ color: 0x3b302a, roughness: 0.95 })
     const blanketMaterial = new THREE.MeshStandardMaterial({ color: 0x6b4a32, roughness: 1 })
     const bedGeometry = new THREE.BoxGeometry(3, 0.42, 2)
     const blanketGeometry = new THREE.BoxGeometry(2.9, 0.14, 1.9)
     const pillowGeometry = new THREE.BoxGeometry(1.1, 0.22, 0.5)
-    this.disposables.push(bedMaterial, blanketMaterial, bedGeometry, blanketGeometry, pillowGeometry)
+    this.disposables.push(
+      bedMaterial,
+      blanketMaterial,
+      bedGeometry,
+      blanketGeometry,
+      pillowGeometry,
+    )
     const bed = new THREE.Mesh(bedGeometry, bedMaterial)
     bed.position.set(-2.2, 0.3, -2.6)
     this.scene.add(bed)
@@ -134,7 +143,6 @@ export class RoomScene {
     pillow.position.set(-2.2, 0.62, -3.35)
     this.scene.add(pillow)
 
-    // stove
     const counterMaterial = new THREE.MeshStandardMaterial({ color: 0x22262e, roughness: 0.7 })
     const counterGeometry = new THREE.BoxGeometry(2.4, 0.9, 1.3)
     this.disposables.push(counterMaterial, counterGeometry)
@@ -155,8 +163,9 @@ export class RoomScene {
       burner.position.set(x, 0.93, -3.2)
       this.scene.add(burner)
     }
+  }
 
-    // purifier
+  private buildPurifier(): THREE.Mesh {
     const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xd9d4cc, roughness: 0.55 })
     const bodyGeometry = new THREE.CylinderGeometry(0.42, 0.42, 1.3, 24)
     this.disposables.push(bodyMaterial, bodyGeometry)
@@ -171,19 +180,26 @@ export class RoomScene {
       side: THREE.DoubleSide,
     })
     this.disposables.push(fanGeometry, fanMaterial)
-    this.fan = new THREE.Mesh(fanGeometry, fanMaterial)
-    this.fan.position.set(2.6, 1.32, 1.9)
-    this.fan.rotation.x = -Math.PI / 2
-    this.scene.add(this.fan)
+    const fan = new THREE.Mesh(fanGeometry, fanMaterial)
+    fan.position.set(2.6, 1.32, 1.9)
+    fan.rotation.x = -Math.PI / 2
+    this.scene.add(fan)
 
-    const ledMaterial = new THREE.MeshBasicMaterial({ color: 0x2f3a33 })
     const ledGeometry = new THREE.SphereGeometry(0.06, 8, 8)
-    this.disposables.push(ledMaterial, ledGeometry)
-    this.led = new THREE.Mesh(ledGeometry, ledMaterial)
-    this.led.position.set(2.6, 1.1, 2.32)
-    this.scene.add(this.led)
+    this.disposables.push(this.ledMaterial, ledGeometry)
+    const led = new THREE.Mesh(ledGeometry, this.ledMaterial)
+    led.position.set(2.6, 1.1, 2.32)
+    this.scene.add(led)
 
-    // particles
+    return fan
+  }
+
+  private buildParticles(): {
+    positions: Float32Array
+    attribute: THREE.BufferAttribute
+    material: THREE.PointsMaterial
+    points: THREE.Points
+  } {
     const count = 700
     const geometry = new THREE.BufferGeometry()
     const positions = new Float32Array(count * 3)
@@ -192,9 +208,10 @@ export class RoomScene {
       positions[i * 3 + 1] = 0.2 + Math.random() * 3.2
       positions[i * 3 + 2] = -3.6 + Math.random() * 7.2
     }
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    const sprite = glowTexture()
-    this.particleMaterial = new THREE.PointsMaterial({
+    const attribute = new THREE.BufferAttribute(positions, 3)
+    geometry.setAttribute('position', attribute)
+    const sprite = softRadialTexture(64, 'rgba(255,255,255,0.95)', 'rgba(255,255,255,0.3)')
+    const material = new THREE.PointsMaterial({
       size: 0.075,
       map: sprite,
       transparent: true,
@@ -203,14 +220,8 @@ export class RoomScene {
       blending: THREE.AdditiveBlending,
       color: new THREE.Color('#e7b98a'),
     })
-    this.disposables.push(geometry, sprite, this.particleMaterial)
-    this.particles = new THREE.Points(geometry, this.particleMaterial)
-    this.scene.add(this.particles)
-
-    this.resizeObserver = new ResizeObserver(() => this.resize())
-    this.resizeObserver.observe(canvas)
-    this.resize()
-    this.render()
+    this.disposables.push(geometry, sprite, material)
+    return { positions, attribute, material, points: new THREE.Points(geometry, material) }
   }
 
   resize(): void {
@@ -224,15 +235,13 @@ export class RoomScene {
 
   setPurifier(on: boolean): void {
     this.purifierOn = on
-    const material = this.led.material as THREE.MeshBasicMaterial
-    material.color.set(on ? '#4fd08a' : '#2f3a33')
+    this.ledMaterial.color.set(on ? '#4fd08a' : '#2f3a33')
     if (this.reducedMotion) this.render()
   }
 
   setIndoor(pm25: number, hazeColor: string): void {
     this.indoorPm25 = pm25
-    const material = this.windowGlow.material as THREE.MeshBasicMaterial
-    material.color.set(hazeColor)
+    this.windowMaterial.color.set(hazeColor)
     this.windowLight.intensity = 6 + Math.min(20, pm25 / 40)
     if (this.reducedMotion) this.render()
   }
@@ -262,9 +271,7 @@ export class RoomScene {
     }
 
     if (!this.reducedMotion) {
-      const attribute = this.particles.geometry.getAttribute('position')
-      const array = attribute.array as Float32Array
-      const target = new THREE.Vector3(2.6, 0.7, 1.9)
+      const array = this.particlePositions
 
       for (let i = 0; i < array.length; i += 3) {
         let x = array[i] ?? 0
@@ -272,9 +279,9 @@ export class RoomScene {
         let z = array[i + 2] ?? 0
 
         if (this.purifierOn) {
-          const dx = target.x - x
-          const dy = target.y - y
-          const dz = target.z - z
+          const dx = PURIFIER_TARGET.x - x
+          const dy = PURIFIER_TARGET.y - y
+          const dz = PURIFIER_TARGET.z - z
           const distance = Math.hypot(dx, dy, dz) || 1
           const pull = 0.055 + intensity * 0.05
           x += (dx / distance) * pull
@@ -296,7 +303,7 @@ export class RoomScene {
         array[i + 1] = y
         array[i + 2] = z
       }
-      attribute.needsUpdate = true
+      this.particleAttribute.needsUpdate = true
     }
 
     this.renderer.render(this.scene, this.camera)

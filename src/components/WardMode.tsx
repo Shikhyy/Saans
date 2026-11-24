@@ -6,11 +6,18 @@ import { useApp } from '../state/app'
 import { fmt, fmtCompact, inr } from '../lib/format'
 import { Heatmap } from './Heatmap'
 
-const HOUSEHOLDS = 480
-const BIOMASS_SHARE = 0.72
-const BIOMASS_COUNT = Math.round(HOUSEHOLDS * BIOMASS_SHARE)
-const COLUMNS = 48
-const ROWS = HOUSEHOLDS / COLUMNS
+/** Number of households represented on the illustrative ward block. */
+const WARD_HOUSEHOLDS = 480
+/** Share of ward households initially cooking with solid biomass. */
+const WARD_BIOMASS_SHARE = 0.72
+const BIOMASS_COUNT = Math.round(WARD_HOUSEHOLDS * WARD_BIOMASS_SHARE)
+/** Grid columns in the 480-dot canvas matrix (`48 × 10`). */
+const WARD_COLUMNS = 48
+const WARD_ROWS = WARD_HOUSEHOLDS / WARD_COLUMNS
+const WARD_PEOPLE_PER_HOUSEHOLD = 5
+const SCHOOL_CHILDREN = 400
+const RECESS_START_HOUR = 10.5
+const RECESS_DURATION_HOURS = 0.75
 
 function DotField({ switched }: { switched: number }) {
   const ref = useRef<HTMLCanvasElement | null>(null)
@@ -31,13 +38,13 @@ function DotField({ switched }: { switched: number }) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, width, height)
 
-      const gapX = width / COLUMNS
-      const gapY = height / ROWS
+      const gapX = width / WARD_COLUMNS
+      const gapY = height / WARD_ROWS
       const radius = Math.min(gapX, gapY) * 0.26
 
-      for (let index = 0; index < HOUSEHOLDS; index += 1) {
-        const column = index % COLUMNS
-        const row = Math.floor(index / COLUMNS)
+      for (let index = 0; index < WARD_HOUSEHOLDS; index += 1) {
+        const column = index % WARD_COLUMNS
+        const row = Math.floor(index / WARD_COLUMNS)
         const x = gapX * (column + 0.5)
         const y = gapY * (row + 0.5)
         const isBiomass = index < BIOMASS_COUNT
@@ -61,11 +68,15 @@ export function WardMode() {
   const { t, tf, today, profile, cleanWindow } = useApp()
   const [switched, setSwitched] = useState(Math.round(BIOMASS_COUNT * 0.3))
 
-  const targetShare = (BIOMASS_COUNT - switched) / HOUSEHOLDS
+  const targetShare = (BIOMASS_COUNT - switched) / WARD_HOUSEHOLDS
   const scenario = useMemo(
     () =>
       wardScenario(
-        { households: HOUSEHOLDS, biomassShare: BIOMASS_SHARE, peoplePerHousehold: 5 },
+        {
+          households: WARD_HOUSEHOLDS,
+          biomassShare: WARD_BIOMASS_SHARE,
+          peoplePerHousehold: WARD_PEOPLE_PER_HOUSEHOLD,
+        },
         targetShare,
         'lpg',
       ),
@@ -73,20 +84,27 @@ export function WardMode() {
   )
 
   const recess = useMemo(
-    () => (today ? schoolRecess(today.points, 400, 10.5, 0.75) : null),
+    () =>
+      today
+        ? schoolRecess(today.points, SCHOOL_CHILDREN, RECESS_START_HOUR, RECESS_DURATION_HOURS)
+        : null,
     [today],
   )
 
   const heatmapSamples = useMemo<ExposureSample[]>(
     () =>
-      (today?.points ?? [])
-        .filter((point) => point.pm25 !== null)
-        .map((point) => ({
-          lat: profile.latitude,
-          lon: profile.longitude,
-          hour: point.hour,
-          pm25: point.pm25 as number,
-        })),
+      (today?.points ?? []).flatMap((point) =>
+        point.pm25 === null
+          ? []
+          : [
+              {
+                lat: profile.latitude,
+                lon: profile.longitude,
+                hour: point.hour,
+                pm25: point.pm25,
+              },
+            ],
+      ),
     [today, profile.latitude, profile.longitude],
   )
 
@@ -111,10 +129,17 @@ export function WardMode() {
           <div className="dotfield" data-reveal>
             <DotField switched={switched} />
           </div>
-          <Heatmap samples={heatmapSamples} lat={profile.latitude} lon={profile.longitude} hours={heatmapHours} />
+          <Heatmap
+            samples={heatmapSamples}
+            lat={profile.latitude}
+            lon={profile.longitude}
+            hours={heatmapHours}
+          />
           <p className="note">{t('ward.heatmap')}</p>
           <p className="note">{t('ward.heatmapNote')}</p>
-          <p className="note">{tf('ward.households', { count: fmt(HOUSEHOLDS), wood: fmt(BIOMASS_COUNT) })}</p>
+          <p className="note">
+            {tf('ward.households', { count: fmt(WARD_HOUSEHOLDS), wood: fmt(BIOMASS_COUNT) })}
+          </p>
         </div>
 
         <div className="ward__controls" data-reveal-group>
@@ -137,7 +162,10 @@ export function WardMode() {
               step={4}
               value={switched}
               onChange={(event) => setSwitched(Number(event.target.value))}
-              aria-valuetext={`${switched} of ${BIOMASS_COUNT} households switched`}
+              aria-valuetext={tf('ward.switchValue', {
+                count: fmt(switched),
+                total: fmt(BIOMASS_COUNT),
+              })}
             />
           </div>
 
@@ -159,9 +187,7 @@ export function WardMode() {
               <div className="readout__k">{t('ward.people')}</div>
             </div>
             <div className="readout">
-              <div className="readout__v num">
-                {scenario.inhaledAvoidedKgPerYear.toFixed(1)} kg
-              </div>
+              <div className="readout__v num">{scenario.inhaledAvoidedKgPerYear.toFixed(1)} kg</div>
               <div className="readout__k">
                 {t('ward.inhaled')} · {t('ward.perYear')}
               </div>

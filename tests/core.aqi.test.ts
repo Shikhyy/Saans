@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  aqiCategory,
-  computeAqi,
-  subIndex,
-  whoMultiple,
-  CATEGORY_LABEL,
-} from '../src/core/aqi'
+import { aqiCategory, computeAqi, subIndex, whoMultiple, CATEGORY_LABEL } from '../src/core/aqi'
 
 /**
  * Golden values from the CPCB National AQI breakpoint table. Each band edge is checked from both

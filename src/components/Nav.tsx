@@ -48,10 +48,10 @@ export function Nav({ path, navigate, onOpenCity }: NavProps) {
       inert={away || undefined}
     >
       <div className="shell nav__inner">
-        <a className="nav__mark" href="/" onClick={go('/')} aria-label="SAANS home">
+        <a className="nav__mark" href="/" onClick={go('/')} aria-label={t('nav.homeLabel')}>
           SAANS
         </a>
-        <nav className="nav__links" aria-label="Sections">
+        <nav className="nav__links" aria-label={t('footer.menu')}>
           <a href="/#day" onClick={go('/#day')}>
             {t('nav.day')}
           </a>

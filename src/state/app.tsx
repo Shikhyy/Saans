@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -15,85 +16,26 @@ import {
   cleanestWindow,
   dayDose,
   DEFAULT_ROUTINES,
+  fitRoutinesInWindow,
+  moveRoutine,
   type ShiftSuggestion,
 } from '../core/planner'
 import type { AirPayload, PlanPayload } from '../core/schemas'
-import { airPayloadSchema, profileSchema } from '../core/schemas'
 import type {
+  AqiCategory,
   CleanWindow,
   DaySeries,
   HealthProfile,
   HouseholdProfile,
+  Pollutant,
   Routine,
 } from '../core/types'
 import { fetchAir, requestPlan } from '../data/api'
 import { samplePayload } from '../data/sample'
-import { fill, translate, type Language, type StringKey } from '../lib/i18n'
+import { fill, ROUTINE_LABEL_I18N, translate, type Language, type StringKey } from '../lib/i18n'
+import { cacheAir, DEFAULT_PROFILE, readCachedAir, readProfile, saveProfile } from './storage'
 
-const PROFILE_KEY = 'saans.profile.v1'
-const AIR_KEY = 'saans.air.v1'
-
-export const DEFAULT_PROFILE: HouseholdProfile = {
-  city: 'Delhi',
-  latitude: 28.6139,
-  longitude: 77.209,
-  timezone: 'Asia/Kolkata',
-  dwelling: 'apartment',
-  fuel: 'lpg',
-  purifierCadr: 0,
-  floorAreaM2: 42,
-  commuteMode: 'car',
-  commuteKm: 12,
-  members: ['adult', 'child', 'elder'],
-  language: 'en',
-}
-
-function readProfile(): HouseholdProfile {
-  if (typeof window === 'undefined') return DEFAULT_PROFILE
-  try {
-    const raw = window.localStorage.getItem(PROFILE_KEY)
-    if (raw) {
-      const parsed = profileSchema.safeParse(JSON.parse(raw))
-      if (parsed.success) return parsed.data
-    }
-    const params = new URLSearchParams(window.location.search)
-    const lat = Number(params.get('lat'))
-    const lon = Number(params.get('lon'))
-    if (Number.isFinite(lat) && Number.isFinite(lon) && params.get('city')) {
-      return {
-        ...DEFAULT_PROFILE,
-        city: params.get('city') ?? DEFAULT_PROFILE.city,
-        latitude: lat,
-        longitude: lon,
-        language: params.get('lang') === 'hi' ? 'hi' : 'en',
-      }
-    }
-  } catch {
-    // a corrupt profile should never block the app
-  }
-  return DEFAULT_PROFILE
-}
-
-function readCachedAir(): AirPayload | null {
-  try {
-    const raw = window.localStorage.getItem(AIR_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as { at?: number; payload?: unknown }
-    if (!parsed.payload) return null
-    const result = airPayloadSchema.safeParse(parsed.payload)
-    return result.success ? result.data : null
-  } catch {
-    return null
-  }
-}
-
-function cacheAir(payload: AirPayload): void {
-  try {
-    window.localStorage.setItem(AIR_KEY, JSON.stringify({ at: Date.now(), payload }))
-  } catch {
-    // storage may be full or blocked; the app works without it
-  }
-}
+export { DEFAULT_PROFILE }
 
 export interface AppValue {
   profile: HouseholdProfile
@@ -108,8 +50,8 @@ export interface AppValue {
   today: DaySeries | null
   pm25: number
   aqi: number
-  category: string
-  dominant: string | null
+  category: AqiCategory
+  dominant: Pollutant | null
   indoor: IndoorResult
   routines: Routine[]
   setRoutineStart: (id: string, start: number) => void
@@ -133,22 +75,17 @@ const AppContext = createContext<AppValue | null>(null)
 export function AppProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<HouseholdProfile>(readProfile)
   const [routines, setRoutines] = useState<Routine[]>(DEFAULT_ROUTINES)
-  const [activeMember, setActiveMember] = useState<HealthProfile>(
-    profile.members[0] ?? 'adult',
-  )
+  const [activeMember, setActiveMember] = useState<HealthProfile>(profile.members[0] ?? 'adult')
   const [air, setAir] = useState<AirPayload | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready'>('loading')
   const [offline, setOffline] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [plan, setPlan] = useState<PlanPayload | null>(null)
   const [planStatus, setPlanStatus] = useState<'idle' | 'loading' | 'ready'>('idle')
+  const planAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(PROFILE_KEY, JSON.stringify(profile))
-    } catch {
-      // ignore
-    }
+    saveProfile(profile)
   }, [profile])
 
   useEffect(() => {
@@ -178,6 +115,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => controller.abort()
   }, [profile.latitude, profile.longitude, refreshKey])
 
+  useEffect(() => () => planAbortRef.current?.abort(), [])
+
   const updateProfile = useCallback((patch: Partial<HouseholdProfile>) => {
     setProfile((current) => ({ ...current, ...patch }))
   }, [])
@@ -193,8 +132,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const current = air?.current ?? null
   const pm25 = current?.pm25 ?? 0
   const aqi = current?.aqi.aqi ?? 0
-  const category = current?.aqi.category ?? 'moderate'
-  const dominant = current?.aqi.dominant ?? null
+  const category: AqiCategory = current?.aqi.category ?? 'moderate'
+  const dominant: Pollutant | null = current?.aqi.dominant ?? null
 
   const indoor = useMemo(
     () =>
@@ -215,10 +154,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const budget = dailyBudget(activeMember)
 
-  const cleanWindow = useMemo(
-    () => (today ? cleanestWindow(today.points, 2) : null),
-    [today],
-  )
+  const cleanWindow = useMemo(() => (today ? cleanestWindow(today.points, 2) : null), [today])
 
   const bestShift = useMemo(() => {
     if (!today) return null
@@ -233,22 +169,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const hacks = useMemo(
     () =>
-      interventions({
-        outdoorPm25: pm25,
-        dwelling: profile.dwelling,
-        fuel: profile.fuel,
-        floorAreaM2: profile.floorAreaM2,
-        purifierCadr: profile.purifierCadr,
-      }),
-    [pm25, profile.dwelling, profile.fuel, profile.floorAreaM2, profile.purifierCadr],
+      interventions(
+        {
+          outdoorPm25: pm25,
+          dwelling: profile.dwelling,
+          fuel: profile.fuel,
+          floorAreaM2: profile.floorAreaM2,
+          purifierCadr: profile.purifierCadr,
+        },
+        language,
+      ),
+    [pm25, profile.dwelling, profile.fuel, profile.floorAreaM2, profile.purifierCadr, language],
   )
 
   const setRoutineStart = useCallback((id: string, start: number) => {
     setRoutines((current) =>
       current.map((routine) =>
-        routine.id === id && routine.movable
-          ? { ...routine, start: Math.min(23.75, Math.max(0, start)) }
-          : routine,
+        routine.id === id && routine.movable ? moveRoutine(routine, start) : routine,
       ),
     )
   }, [])
@@ -257,19 +194,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const adoptWindow = useCallback(() => {
     if (!cleanWindow) return
-    setRoutines((current) => {
-      let cursor = cleanWindow.startHour
-      return current.map((routine) => {
-        if (!routine.movable) return routine
-        const duration = routine.minutes / 60
-        const start = Math.min(
-          Math.max(cleanWindow.startHour, cleanWindow.endHour - duration),
-          Math.max(cleanWindow.startHour, cursor),
-        )
-        cursor = Math.min(cleanWindow.endHour, start + duration + 0.25)
-        return { ...routine, start }
-      })
-    })
+    setRoutines((current) => fitRoutinesInWindow(current, cleanWindow))
   }, [cleanWindow])
 
   const facts: PlanFacts = useMemo(() => {
@@ -279,7 +204,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       pm25,
       category,
       cleanWindow: cleanWindow
-        ? { startHour: cleanWindow.startHour, endHour: cleanWindow.endHour, meanPm25: cleanWindow.meanPm25 }
+        ? {
+            startHour: cleanWindow.startHour,
+            endHour: cleanWindow.endHour,
+            meanPm25: cleanWindow.meanPm25,
+          }
         : null,
       dayDoseUg: dose,
       budgetUg: budget,
@@ -287,7 +216,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       bestShift: bestShift
         ? {
             label:
-              routines.find((routine) => routine.id === bestShift.routineId)?.label ?? 'a routine',
+              ROUTINE_LABEL_I18N[language][bestShift.routineId] ??
+              routines.find((routine) => routine.id === bestShift.routineId)?.label ??
+              'a routine',
             start: bestShift.start,
             savedUg: bestShift.savedUg,
           }
@@ -296,20 +227,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ? { title: topHack.title, deltaPm25: topHack.deltaPm25, costInr: topHack.costInr }
         : null,
     }
-  }, [aqi, pm25, category, cleanWindow, dose, budget, indoor.cookingPeakPm25, bestShift, hacks, routines, today])
+  }, [
+    aqi,
+    pm25,
+    category,
+    cleanWindow,
+    dose,
+    budget,
+    indoor.cookingPeakPm25,
+    bestShift,
+    hacks,
+    routines,
+    language,
+  ])
 
   const generatePlan = useCallback(async () => {
-    setPlanStatus('loading')
+    planAbortRef.current?.abort()
     const controller = new AbortController()
+    planAbortRef.current = controller
+    setPlanStatus('loading')
     try {
       const payload = await requestPlan(profile, facts, controller.signal)
-      setPlan(payload)
-      setPlanStatus('ready')
+      if (!controller.signal.aborted) {
+        setPlan(payload)
+        setPlanStatus('ready')
+      }
     } catch {
-      setPlan(composePlan(facts, profile))
-      setPlanStatus('ready')
+      if (!controller.signal.aborted) {
+        setPlan(composePlan(facts, profile))
+        setPlanStatus('ready')
+      }
     }
   }, [profile, facts])
+
+  const refresh = useCallback(() => setRefreshKey((key) => key + 1), [])
 
   const value: AppValue = useMemo(
     () => ({
@@ -321,7 +272,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       air,
       status,
       offline,
-      refresh: () => setRefreshKey((key) => key + 1),
+      refresh,
       today,
       pm25,
       aqi,
@@ -353,6 +304,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       air,
       status,
       offline,
+      refresh,
       today,
       pm25,
       aqi,

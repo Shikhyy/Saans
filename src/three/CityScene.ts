@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { buildingWindowTexture, mulberry32, softRadialTexture } from './textures'
 
 /**
  * The city is the clock.
@@ -19,65 +20,28 @@ export interface CityState {
   pm25: number
 }
 
-const QUALITY: Record<Quality, { dpr: number; buildings: number; particles: number; aa: boolean }> = {
-  high: { dpr: 2, buildings: 240, particles: 3600, aa: true },
-  medium: { dpr: 1.5, buildings: 180, particles: 1800, aa: true },
-  low: { dpr: 1, buildings: 110, particles: 700, aa: false },
-}
-
-function mulberry32(seed: number): () => number {
-  let a = seed
-  return () => {
-    a |= 0
-    a = (a + 0x6d2b79f5) | 0
-    let t = Math.imul(a ^ (a >>> 15), 1 | a)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+const QUALITY: Record<Quality, { dpr: number; buildings: number; particles: number; aa: boolean }> =
+  {
+    high: { dpr: 2, buildings: 240, particles: 3600, aa: true },
+    medium: { dpr: 1.5, buildings: 180, particles: 1800, aa: true },
+    low: { dpr: 1, buildings: 110, particles: 700, aa: false },
   }
-}
 
-function softTexture(size = 64, inner = 'rgba(255,255,255,0.9)'): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-  const ctx = canvas.getContext('2d')
-  if (ctx) {
-    const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
-    gradient.addColorStop(0, inner)
-    gradient.addColorStop(0.45, 'rgba(255,255,255,0.35)')
-    gradient.addColorStop(1, 'rgba(255,255,255,0)')
-    ctx.fillStyle = gradient
-    ctx.fillRect(0, 0, size, size)
-  }
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
-  return texture
-}
+const CAMERA_POSITIONS: readonly [number, number, number][] = [
+  [0, 24, 66],
+  [10, 22, 62],
+  [16, 14, 40],
+  [8, 7.5, 22],
+  [2.5, 4.2, 8],
+]
 
-function windowTexture(random: () => number): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas')
-  canvas.width = 128
-  canvas.height = 256
-  const ctx = canvas.getContext('2d')
-  if (ctx) {
-    ctx.fillStyle = '#000'
-    ctx.fillRect(0, 0, 128, 256)
-    for (let y = 12; y < 246; y += 17) {
-      for (let x = 10; x < 118; x += 13) {
-        if (random() < 0.16) {
-          const warmth = Math.floor(150 + random() * 80)
-          ctx.fillStyle = `rgba(255, ${warmth}, ${Math.floor(warmth * 0.55)}, ${0.45 + random() * 0.5})`
-          ctx.fillRect(x, y, 5, 6)
-        }
-      }
-    }
-  }
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
-  texture.wrapS = THREE.RepeatWrapping
-  texture.wrapT = THREE.RepeatWrapping
-  return texture
-}
+const CAMERA_TARGETS: readonly [number, number, number][] = [
+  [0, 11, -44],
+  [-2, 11, -48],
+  [-4, 9.5, -50],
+  [-4, 7.5, -52],
+  [-3, 6.5, -54],
+]
 
 const SKY = {
   dayTop: new THREE.Color('#46596b'),
@@ -86,6 +50,7 @@ const SKY = {
   nightHorizon: new THREE.Color('#241d18'),
   emberTop: new THREE.Color('#2b2030'),
   emberHorizon: new THREE.Color('#b4642f'),
+  smogAmber: new THREE.Color('#c98a4a'),
 }
 
 export class CityScene {
@@ -94,16 +59,32 @@ export class CityScene {
   private readonly camera: THREE.PerspectiveCamera
   private readonly clock = new THREE.Clock()
   private readonly fog: THREE.FogExp2
-  private readonly skyMaterial: THREE.ShaderMaterial
+  private readonly skyUniforms = {
+    uTop: { value: SKY.nightTop.clone() },
+    uHorizon: { value: SKY.nightHorizon.clone() },
+    uSunDir: { value: new THREE.Vector3(0, 0.2, -1) },
+    uSunColor: { value: new THREE.Color('#ffb26b') },
+    uHaze: { value: 0.5 },
+    uNight: { value: 1 },
+    uGlow: { value: new THREE.Color('#ff9a4a') },
+  }
   private readonly sun: THREE.Sprite
+  private readonly sunMaterial: THREE.SpriteMaterial
   private readonly sunLight: THREE.DirectionalLight
   private readonly hemi: THREE.HemisphereLight
-  private readonly particles: THREE.Points
+  private readonly particlePositions: Float32Array
+  private readonly particleAttribute: THREE.BufferAttribute
   private readonly particleMaterial: THREE.PointsMaterial
-  private readonly streetLights: THREE.Points
   private readonly streetMaterial: THREE.PointsMaterial
   private readonly buildingMaterial: THREE.MeshStandardMaterial
   private readonly disposables: (THREE.BufferGeometry | THREE.Material | THREE.Texture)[] = []
+
+  // Scratch vectors/colors reused across animation frames to avoid GC pressure at 60fps.
+  private readonly tmpHorizon = new THREE.Color()
+  private readonly tmpCamPos = new THREE.Vector3()
+  private readonly tmpLookAt = new THREE.Vector3()
+  private readonly tmpOffset = new THREE.Vector3()
+  private readonly tmpSpherical = new THREE.Spherical()
 
   private frame = 0
   private active = false
@@ -119,6 +100,7 @@ export class CityScene {
 
   private readonly reducedMotion: boolean
   private readonly resizeObserver: ResizeObserver
+  private readonly unbindPointer: () => void
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -140,25 +122,44 @@ export class CityScene {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
 
     this.camera = new THREE.PerspectiveCamera(44, 1, 0.5, 1200)
-
     this.fog = new THREE.FogExp2(0x1a1f26, 0.012)
     this.scene.fog = this.fog
 
     const random = mulberry32(20261123)
 
-    // ---- sky
-    this.skyMaterial = new THREE.ShaderMaterial({
+    this.buildSky()
+
+    this.hemi = new THREE.HemisphereLight(0x9fb0c2, 0x14100c, 0.55)
+    this.scene.add(this.hemi)
+    this.sunLight = new THREE.DirectionalLight(0xffc38a, 1.6)
+    this.sunLight.position.set(-40, 40, -60)
+    this.scene.add(this.sunLight)
+
+    this.buildingMaterial = this.buildCity(random, tier.buildings)
+
+    const particles = this.buildParticles(random, tier.particles)
+    this.particlePositions = particles.positions
+    this.particleAttribute = particles.attribute
+    this.particleMaterial = particles.material
+
+    this.streetMaterial = this.buildStreetLights()
+
+    const sunParts = this.buildSun()
+    this.sun = sunParts.sun
+    this.sunMaterial = sunParts.material
+
+    this.resizeObserver = new ResizeObserver(() => this.resize())
+    this.resizeObserver.observe(canvas)
+    this.resize()
+    this.unbindPointer = this.bindPointer()
+    this.render()
+  }
+
+  private buildSky(): void {
+    const skyMaterial = new THREE.ShaderMaterial({
       side: THREE.BackSide,
       depthWrite: false,
-      uniforms: {
-        uTop: { value: SKY.nightTop.clone() },
-        uHorizon: { value: SKY.nightHorizon.clone() },
-        uSunDir: { value: new THREE.Vector3(0, 0.2, -1) },
-        uSunColor: { value: new THREE.Color('#ffb26b') },
-        uHaze: { value: 0.5 },
-        uNight: { value: 1 },
-        uGlow: { value: new THREE.Color('#ff9a4a') },
-      },
+      uniforms: this.skyUniforms,
       vertexShader: /* glsl */ `
         varying vec3 vWorld;
         void main() {
@@ -193,18 +194,11 @@ export class CityScene {
       `,
     })
     const skyGeometry = new THREE.SphereGeometry(600, 32, 20)
-    this.disposables.push(skyGeometry, this.skyMaterial)
-    this.scene.add(new THREE.Mesh(skyGeometry, this.skyMaterial))
+    this.disposables.push(skyGeometry, skyMaterial)
+    this.scene.add(new THREE.Mesh(skyGeometry, skyMaterial))
+  }
 
-    // ---- light
-    this.hemi = new THREE.HemisphereLight(0x9fb0c2, 0x14100c, 0.55)
-    this.scene.add(this.hemi)
-
-    this.sunLight = new THREE.DirectionalLight(0xffc38a, 1.6)
-    this.sunLight.position.set(-40, 40, -60)
-    this.scene.add(this.sunLight)
-
-    // ---- ground
+  private buildCity(random: () => number, count: number): THREE.MeshStandardMaterial {
     const groundGeometry = new THREE.PlaneGeometry(1400, 1400)
     const groundMaterial = new THREE.MeshStandardMaterial({
       color: 0x0d0f13,
@@ -216,11 +210,9 @@ export class CityScene {
     ground.rotation.x = -Math.PI / 2
     this.scene.add(ground)
 
-    // ---- buildings
     const buildingGeometry = new THREE.BoxGeometry(1, 1, 1)
-    const windows = windowTexture(random)
-    this.disposables.push(buildingGeometry, windows)
-    this.buildingMaterial = new THREE.MeshStandardMaterial({
+    const windows = buildingWindowTexture(random)
+    const material = new THREE.MeshStandardMaterial({
       color: 0x1b1f26,
       roughness: 0.86,
       metalness: 0.06,
@@ -228,20 +220,20 @@ export class CityScene {
       emissiveMap: windows,
       emissiveIntensity: 0,
     })
-    this.disposables.push(this.buildingMaterial)
+    this.disposables.push(buildingGeometry, windows, material)
 
-    const buildings = new THREE.InstancedMesh(buildingGeometry, this.buildingMaterial, tier.buildings)
+    const buildings = new THREE.InstancedMesh(buildingGeometry, material, count)
     const matrix = new THREE.Matrix4()
     const color = new THREE.Color()
     const palette = ['#1a1e25', '#20252d', '#171a20', '#242a33', '#14171c']
 
     let placed = 0
     let guard = 0
-    while (placed < tier.buildings && guard < 4000) {
+    while (placed < count && guard < 4000) {
       guard += 1
       const gridX = Math.floor(random() * 18) - 9
       const gridZ = Math.floor(random() * 20) - 15
-      if (Math.abs(gridX) < 1 || Math.abs(gridZ) < 1) continue // keep the two streets clear
+      if (Math.abs(gridX) < 1 || Math.abs(gridZ) < 1) continue
       const x = gridX * 8 + (random() - 0.5) * 2.6
       const z = gridZ * 8 + (random() - 0.5) * 2.6 - 26
       const distance = Math.hypot(x, z + 26)
@@ -261,7 +253,22 @@ export class CityScene {
     if (buildings.instanceColor) buildings.instanceColor.needsUpdate = true
     this.scene.add(buildings)
 
-    // ---- water tanks on roofs (the skyline's real silhouette)
+    this.buildRoofFurniture(random, buildings, placed)
+    this.buildFarHorizon(random)
+
+    return material
+  }
+
+  private buildRoofFurniture(
+    random: () => number,
+    buildings: THREE.InstancedMesh,
+    placed: number,
+  ): void {
+    const matrix = new THREE.Matrix4()
+    const position = new THREE.Vector3()
+    const scale = new THREE.Vector3()
+    const quaternion = new THREE.Quaternion()
+
     const tankGeometry = new THREE.CylinderGeometry(0.9, 0.9, 1.4, 10)
     const tankMaterial = new THREE.MeshStandardMaterial({ color: 0x101318, roughness: 1 })
     this.disposables.push(tankGeometry, tankMaterial)
@@ -269,9 +276,6 @@ export class CityScene {
     let tankCount = 0
     for (let i = 0; i < placed && tankCount < 90; i += 2) {
       buildings.getMatrixAt(i, matrix)
-      const position = new THREE.Vector3()
-      const scale = new THREE.Vector3()
-      const quaternion = new THREE.Quaternion()
       matrix.decompose(position, quaternion, scale)
       if (random() > 0.55) continue
       matrix.makeScale(1, 1, 1)
@@ -283,45 +287,48 @@ export class CityScene {
     tanks.instanceMatrix.needsUpdate = true
     this.scene.add(tanks)
 
-    // ---- roof furniture: a Delhi skyline is parapets, stair boxes and antennas before it is towers
     const parapetGeometry = new THREE.BoxGeometry(1, 1, 1)
     const parapetMaterial = new THREE.MeshStandardMaterial({ color: 0x12161c, roughness: 1 })
-    this.disposables.push(parapetGeometry, parapetMaterial)
-    const parapets = new THREE.InstancedMesh(parapetGeometry, parapetMaterial, placed)
-    const setbacks = new THREE.InstancedMesh(parapetGeometry, parapetMaterial, Math.ceil(placed * 0.4))
-    let setbackCount = 0
-
     const antennaGeometry = new THREE.CylinderGeometry(0.055, 0.075, 1, 5)
     const antennaMaterial = new THREE.MeshStandardMaterial({ color: 0x0b0d11, roughness: 1 })
-    this.disposables.push(antennaGeometry, antennaMaterial)
+    this.disposables.push(parapetGeometry, parapetMaterial, antennaGeometry, antennaMaterial)
+
+    const parapets = new THREE.InstancedMesh(parapetGeometry, parapetMaterial, placed)
+    const setbacks = new THREE.InstancedMesh(
+      parapetGeometry,
+      parapetMaterial,
+      Math.ceil(placed * 0.4),
+    )
     const antennas = new THREE.InstancedMesh(antennaGeometry, antennaMaterial, 60)
+    let setbackCount = 0
     let antennaCount = 0
 
     for (let i = 0; i < placed; i += 1) {
       buildings.getMatrixAt(i, matrix)
-      const position = new THREE.Vector3()
-      const scale = new THREE.Vector3()
-      const quaternion = new THREE.Quaternion()
       matrix.decompose(position, quaternion, scale)
       const roof = position.y + scale.y / 2
 
       matrix.compose(
-        new THREE.Vector3(position.x, roof + 0.16, position.z),
+        this.tmpCamPos.set(position.x, roof + 0.16, position.z),
         quaternion,
-        new THREE.Vector3(scale.x * 1.04, 0.32, scale.z * 1.04),
+        this.tmpLookAt.set(scale.x * 1.04, 0.32, scale.z * 1.04),
       )
       parapets.setMatrixAt(i, matrix)
 
       if (scale.y > 8 && random() < 0.38 && setbackCount < setbacks.count) {
         const lift = 1.4 + random() * 2.4
         matrix.compose(
-          new THREE.Vector3(
+          this.tmpCamPos.set(
             position.x + (random() - 0.5) * scale.x * 0.2,
             roof + 0.32 + lift / 2,
             position.z + (random() - 0.5) * scale.z * 0.2,
           ),
           quaternion,
-          new THREE.Vector3(scale.x * (0.5 + random() * 0.18), lift, scale.z * (0.5 + random() * 0.18)),
+          this.tmpLookAt.set(
+            scale.x * (0.5 + random() * 0.18),
+            lift,
+            scale.z * (0.5 + random() * 0.18),
+          ),
         )
         setbacks.setMatrixAt(setbackCount, matrix)
         setbackCount += 1
@@ -330,13 +337,13 @@ export class CityScene {
       if (random() < 0.22 && antennaCount < 60) {
         const height = 1.4 + random() * 2.6
         matrix.compose(
-          new THREE.Vector3(
+          this.tmpCamPos.set(
             position.x + (random() - 0.5) * scale.x * 0.7,
             roof + height / 2,
             position.z + (random() - 0.5) * scale.z * 0.7,
           ),
           quaternion,
-          new THREE.Vector3(1, height, 1),
+          this.tmpLookAt.set(1, height, 1),
         )
         antennas.setMatrixAt(antennaCount, matrix)
         antennaCount += 1
@@ -348,12 +355,14 @@ export class CityScene {
     antennas.count = antennaCount
     antennas.instanceMatrix.needsUpdate = true
     this.scene.add(parapets, setbacks, antennas)
+  }
 
-    // ---- the far city: a low ring of silhouettes so the horizon is a city, not an edge
+  private buildFarHorizon(random: () => number): void {
     const farGeometry = new THREE.BoxGeometry(1, 1, 1)
     const farMaterial = new THREE.MeshBasicMaterial({ color: 0x101318 })
     this.disposables.push(farGeometry, farMaterial)
     const far = new THREE.InstancedMesh(farGeometry, farMaterial, 220)
+    const matrix = new THREE.Matrix4()
     for (let i = 0; i < 220; i += 1) {
       const angle = (i / 220) * Math.PI * 2 + random() * 0.04
       const radius = 120 + random() * 110
@@ -365,22 +374,31 @@ export class CityScene {
     }
     far.instanceMatrix.needsUpdate = true
     this.scene.add(far)
+  }
 
-    // ---- particles: the air itself
-    const particleGeometry = new THREE.BufferGeometry()
-    const positions = new Float32Array(tier.particles * 3)
-    for (let i = 0; i < tier.particles; i += 1) {
+  private buildParticles(
+    random: () => number,
+    count: number,
+  ): {
+    positions: Float32Array
+    attribute: THREE.BufferAttribute
+    material: THREE.PointsMaterial
+  } {
+    const geometry = new THREE.BufferGeometry()
+    const positions = new Float32Array(count * 3)
+    for (let i = 0; i < count; i += 1) {
       const radius = 8 + random() * 90
       const angle = random() * Math.PI * 2
       positions[i * 3] = Math.cos(angle) * radius
       positions[i * 3 + 1] = random() * 42
       positions[i * 3 + 2] = Math.sin(angle) * radius
     }
-    particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    const particleSprite = softTexture(48, 'rgba(255,255,255,0.75)')
-    this.particleMaterial = new THREE.PointsMaterial({
+    const attribute = new THREE.BufferAttribute(positions, 3)
+    geometry.setAttribute('position', attribute)
+    const sprite = softRadialTexture(48, 'rgba(255,255,255,0.75)')
+    const material = new THREE.PointsMaterial({
       size: 0.55,
-      map: particleSprite,
+      map: sprite,
       transparent: true,
       opacity: 0.4,
       depthWrite: false,
@@ -388,19 +406,20 @@ export class CityScene {
       color: new THREE.Color('#e8d2b4'),
       sizeAttenuation: true,
     })
-    this.disposables.push(particleGeometry, particleSprite, this.particleMaterial)
-    this.particles = new THREE.Points(particleGeometry, this.particleMaterial)
-    this.scene.add(this.particles)
+    this.disposables.push(geometry, sprite, material)
+    this.scene.add(new THREE.Points(geometry, material))
+    return { positions, attribute, material }
+  }
 
-    // ---- street lights
+  private buildStreetLights(): THREE.PointsMaterial {
     const lightPositions: number[] = []
     for (let i = 20; i >= -130; i -= 11) {
       lightPositions.push(-6.5, 4.4, i, 6.5, 4.4, i)
     }
     const streetGeometry = new THREE.BufferGeometry()
     streetGeometry.setAttribute('position', new THREE.Float32BufferAttribute(lightPositions, 3))
-    const streetSprite = softTexture(64, 'rgba(255,200,140,1)')
-    this.streetMaterial = new THREE.PointsMaterial({
+    const streetSprite = softRadialTexture(64, 'rgba(255,200,140,1)')
+    const material = new THREE.PointsMaterial({
       size: 4.2,
       map: streetSprite,
       transparent: true,
@@ -409,30 +428,28 @@ export class CityScene {
       blending: THREE.AdditiveBlending,
       color: new THREE.Color('#ffae5c'),
     })
-    this.disposables.push(streetGeometry, streetSprite, this.streetMaterial)
-    this.streetLights = new THREE.Points(streetGeometry, this.streetMaterial)
-    this.scene.add(this.streetLights)
+    this.disposables.push(streetGeometry, streetSprite, material)
+    this.scene.add(new THREE.Points(streetGeometry, material))
+    return material
+  }
 
-    // ---- sun
-    const sunMaterial = new THREE.SpriteMaterial({
-      map: softTexture(256, 'rgba(255,214,160,1)'),
+  private buildSun(): { sun: THREE.Sprite; material: THREE.SpriteMaterial } {
+    const sunSprite = softRadialTexture(256, 'rgba(255,214,160,1)')
+    const material = new THREE.SpriteMaterial({
+      map: sunSprite,
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       color: new THREE.Color('#ffb26b'),
     })
-    this.sun = new THREE.Sprite(sunMaterial)
-    this.sun.scale.set(80, 80, 1)
-    this.scene.add(this.sun)
-
-    this.resizeObserver = new ResizeObserver(() => this.resize())
-    this.resizeObserver.observe(canvas)
-    this.resize()
-    this.bindPointer()
-    this.render()
+    this.disposables.push(sunSprite, material)
+    const sun = new THREE.Sprite(material)
+    sun.scale.set(80, 80, 1)
+    this.scene.add(sun)
+    return { sun, material }
   }
 
-  private bindPointer(): void {
+  private bindPointer(): () => void {
     const onDown = (event: PointerEvent) => {
       this.dragging = true
       this.lastPointer = { x: event.clientX, y: event.clientY }
@@ -455,6 +472,13 @@ export class CityScene {
     this.canvas.addEventListener('pointermove', onMove)
     this.canvas.addEventListener('pointerup', onUp)
     this.canvas.addEventListener('pointercancel', onUp)
+
+    return () => {
+      this.canvas.removeEventListener('pointerdown', onDown)
+      this.canvas.removeEventListener('pointermove', onMove)
+      this.canvas.removeEventListener('pointerup', onUp)
+      this.canvas.removeEventListener('pointercancel', onUp)
+    }
   }
 
   resize(): void {
@@ -494,37 +518,36 @@ export class CityScene {
     const { progress, hour, pm25 } = this.state
     const haze = THREE.MathUtils.clamp(pm25 / 420, 0, 1)
 
-    // ---- sun position
     const sunAngle = ((hour - 6) / 12) * Math.PI
     const elevation = Math.sin(sunAngle) * 1.15 - 0.18
     const azimuth = -0.85
-    const sunDirection = new THREE.Vector3(
-      Math.cos(azimuth) * Math.cos(elevation),
-      Math.sin(elevation),
-      Math.sin(azimuth) * Math.cos(elevation),
-    ).normalize()
+    this.skyUniforms.uSunDir.value
+      .set(
+        Math.cos(azimuth) * Math.cos(elevation),
+        Math.sin(elevation),
+        Math.sin(azimuth) * Math.cos(elevation),
+      )
+      .normalize()
 
-    // ---- sky colours
     const daylight = THREE.MathUtils.clamp(elevation * 2.2, 0, 1)
     const ember = THREE.MathUtils.clamp(1 - Math.abs(elevation) * 5.5, 0, 1) * (1 - haze * 0.25)
 
-    const top = SKY.nightTop.clone().lerp(SKY.dayTop, daylight).lerp(SKY.emberTop, ember * 0.55)
-    const horizon = SKY.nightHorizon
-      .clone()
+    this.skyUniforms.uTop.value
+      .copy(SKY.nightTop)
+      .lerp(SKY.dayTop, daylight)
+      .lerp(SKY.emberTop, ember * 0.55)
+    this.tmpHorizon
+      .copy(SKY.nightHorizon)
       .lerp(SKY.dayHorizon, daylight)
       .lerp(SKY.emberHorizon, ember * 0.75)
-      .lerp(new THREE.Color('#c98a4a'), haze * 0.32)
+      .lerp(SKY.smogAmber, haze * 0.32)
+    this.skyUniforms.uHorizon.value.copy(this.tmpHorizon)
+    this.skyUniforms.uHaze.value = haze
+    this.skyUniforms.uNight.value = 1 - daylight
 
-    this.skyMaterial.uniforms.uTop!.value = top
-    this.skyMaterial.uniforms.uHorizon!.value = horizon
-    this.skyMaterial.uniforms.uSunDir!.value = sunDirection
-    this.skyMaterial.uniforms.uHaze!.value = haze
-    this.skyMaterial.uniforms.uNight!.value = 1 - daylight
-
-    this.fog.color.copy(horizon).multiplyScalar(0.82)
+    this.fog.color.copy(this.tmpHorizon).multiplyScalar(0.82)
     this.fog.density = 0.0055 + haze * 0.03
 
-    // ---- lights
     const night = 1 - daylight
     this.buildingMaterial.emissiveIntensity = 0.18 + night * 0.72
     this.streetMaterial.opacity = 0.3 + night * 0.7
@@ -532,78 +555,64 @@ export class CityScene {
     this.sunLight.intensity = 0.25 + daylight * 1.5
     this.sunLight.color.setRGB(1, 0.72 - haze * 0.14, 0.5 - haze * 0.12)
 
-    this.sun.position.copy(sunDirection).multiplyScalar(420)
-    const sunMaterial = this.sun.material as THREE.SpriteMaterial
-    sunMaterial.opacity = THREE.MathUtils.clamp(0.25 + daylight * 0.9, 0, 1) * (1 - haze * 0.45)
+    this.sun.position.copy(this.skyUniforms.uSunDir.value).multiplyScalar(420)
+    this.sunMaterial.opacity =
+      THREE.MathUtils.clamp(0.25 + daylight * 0.9, 0, 1) * (1 - haze * 0.45)
     this.sun.scale.setScalar(70 + haze * 70)
 
-    // ---- particles
     this.particleMaterial.opacity = 0.08 + haze * 0.5
     this.particleMaterial.size = 0.42 + haze * 0.5
 
-    // ---- camera: the walk down
     const p = THREE.MathUtils.clamp(progress, 0, 1)
     const ease = p * p * (3 - 2 * p)
-    const positions: [number, number, number][] = [
-      [0, 24, 66],
-      [10, 22, 62],
-      [16, 14, 40],
-      [8, 7.5, 22],
-      [2.5, 4.2, 8],
-    ]
-    const targets: [number, number, number][] = [
-      [0, 11, -44],
-      [-2, 11, -48],
-      [-4, 9.5, -50],
-      [-4, 7.5, -52],
-      [-3, 6.5, -54],
-    ]
-
-    const segment = ease * (positions.length - 1)
-    const index = Math.min(positions.length - 2, Math.floor(segment))
+    const segment = ease * (CAMERA_POSITIONS.length - 1)
+    const index = Math.min(CAMERA_POSITIONS.length - 2, Math.floor(segment))
     const local = segment - index
-    const a = positions[index] ?? positions[0]!
-    const b = positions[index + 1] ?? positions[positions.length - 1]!
-    const ta = targets[index] ?? targets[0]!
-    const tb = targets[index + 1] ?? targets[targets.length - 1]!
+    const a = CAMERA_POSITIONS[index]
+    const b = CAMERA_POSITIONS[index + 1]
+    const ta = CAMERA_TARGETS[index]
+    const tb = CAMERA_TARGETS[index + 1]
+    if (!a || !b || !ta || !tb) return
 
     const drift = this.reducedMotion ? 0 : Math.sin(this.clock.elapsedTime * 0.25) * 0.5
 
     this.yaw += (this.targetYaw - this.yaw) * 0.08
     this.pitch += (this.targetPitch - this.pitch) * 0.08
 
-    const cameraPosition = new THREE.Vector3(
+    this.tmpCamPos.set(
       THREE.MathUtils.lerp(a[0], b[0], local) + drift,
       THREE.MathUtils.lerp(a[1], b[1], local) + this.pitch * 6,
       THREE.MathUtils.lerp(a[2], b[2], local),
     )
-    const lookAt = new THREE.Vector3(
+    this.tmpLookAt.set(
       THREE.MathUtils.lerp(ta[0], tb[0], local),
       THREE.MathUtils.lerp(ta[1], tb[1], local),
       THREE.MathUtils.lerp(ta[2], tb[2], local),
     )
 
-    // Orbit: rotate the camera around the look-at point.
-    const offset = cameraPosition.clone().sub(lookAt)
-    const spherical = new THREE.Spherical().setFromVector3(offset)
-    spherical.theta += this.yaw
-    spherical.phi = THREE.MathUtils.clamp(spherical.phi + this.pitch * 0.6, 0.35, 1.52)
-    offset.setFromSpherical(spherical)
-    cameraPosition.copy(lookAt).add(offset)
+    this.tmpOffset.copy(this.tmpCamPos).sub(this.tmpLookAt)
+    this.tmpSpherical.setFromVector3(this.tmpOffset)
+    this.tmpSpherical.theta += this.yaw
+    this.tmpSpherical.phi = THREE.MathUtils.clamp(
+      this.tmpSpherical.phi + this.pitch * 0.6,
+      0.35,
+      1.52,
+    )
+    this.tmpOffset.setFromSpherical(this.tmpSpherical)
+    this.tmpCamPos.copy(this.tmpLookAt).add(this.tmpOffset)
 
-    this.camera.position.copy(cameraPosition)
-    this.camera.lookAt(lookAt)
+    this.camera.position.copy(this.tmpCamPos)
+    this.camera.lookAt(this.tmpLookAt)
 
     if (!this.reducedMotion) {
-      const positionsAttribute = this.particles.geometry.getAttribute('position')
-      const array = positionsAttribute.array as Float32Array
+      const array = this.particlePositions
       const time = this.clock.elapsedTime
       for (let i = 0; i < array.length; i += 3) {
         array[i + 1] = (array[i + 1] ?? 0) + 0.014 + haze * 0.02
         array[i] = (array[i] ?? 0) + Math.sin(time * 0.3 + i) * 0.004
         if ((array[i + 1] ?? 0) > 44) array[i + 1] = 0
       }
-      positionsAttribute.needsUpdate = true
+      this.particleAttribute.needsUpdate = true
     }
 
     this.renderer.render(this.scene, this.camera)
@@ -612,9 +621,9 @@ export class CityScene {
   dispose(): void {
     this.disposed = true
     cancelAnimationFrame(this.frame)
+    this.unbindPointer()
     this.resizeObserver.disconnect()
     for (const item of this.disposables) item.dispose()
-    this.sun.material.dispose()
     this.renderer.dispose()
   }
 }

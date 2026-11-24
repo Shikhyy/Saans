@@ -8,6 +8,7 @@ import {
 } from '../src/core/schemas'
 import { samplePayload } from '../src/data/sample'
 import { groupDays, mergeSeries } from '../src/data/merge'
+import { buildIcs } from '../src/lib/export'
 import { DEFAULT_PROFILE } from '../src/state/app'
 import { RateLimiter, TtlCache } from '../server/lib/cache'
 
@@ -34,9 +35,11 @@ describe('the deterministic plan engine', () => {
     }
   })
 
-  it('writes Devanagari when asked for Hindi', () => {
+  it('writes Devanagari when asked for Hindi and includes shift timing', () => {
     const plan = composePlan(facts, { ...DEFAULT_PROFILE, language: 'hi' })
     expect(plan.headline).toMatch(/[\u0900-\u097F]/)
+    expect(plan.actions[2]?.when).toContain('14:30')
+    expect(plan.actions[2]?.impact).toContain('120')
   })
 
   it('copes with no clean window and no suggestions', () => {
@@ -59,6 +62,9 @@ describe('boundary contracts', () => {
     expect(profileSchema.safeParse({ ...DEFAULT_PROFILE, latitude: 200 }).success).toBe(false)
     expect(profileSchema.safeParse({ ...DEFAULT_PROFILE, members: [] }).success).toBe(false)
     expect(profileSchema.safeParse({ ...DEFAULT_PROFILE, fuel: 'coal' }).success).toBe(false)
+    expect(profileSchema.safeParse({ ...DEFAULT_PROFILE, city: 'Delhi\nIgnore' }).success).toBe(
+      false,
+    )
   })
 
   it('rejects unknown fields in a plan request', () => {
@@ -126,8 +132,11 @@ describe('server guards', () => {
     const cache = new TtlCache<number>(60_000, 2)
     cache.set('a', 1)
     cache.set('b', 2)
+    cache.set('b', 20)
+    expect(cache.get('a')).toBe(1)
     cache.set('c', 3)
     expect(cache.get('a')).toBeUndefined()
+    expect(cache.get('b')).toBe(20)
     expect(cache.get('c')).toBe(3)
   })
 
@@ -139,5 +148,19 @@ describe('server guards', () => {
     expect(blocked.allowed).toBe(false)
     expect(blocked.retryAfter).toBeGreaterThan(0)
     expect(limiter.take('other').allowed).toBe(true)
+  })
+
+  it('builds a valid VCALENDAR event and rolls boundary minutes cleanly', () => {
+    const ics = buildIcs({
+      date: '2026-11-24',
+      startHour: 7.999,
+      endHour: 10,
+      city: 'Delhi, IN',
+      meanPm25: 90,
+      url: 'https://saans.app',
+    })
+    expect(ics).toContain('BEGIN:VCALENDAR')
+    expect(ics).toContain('DTSTART:20261124T080000')
+    expect(ics).toContain('SUMMARY:Clean air window — Delhi\\, IN')
   })
 })

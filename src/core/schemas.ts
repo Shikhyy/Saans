@@ -34,14 +34,31 @@ export const weatherResponseSchema = z.object({
   hourly: weatherHourlySchema,
 })
 
+export const aqiCategorySchema = z.enum([
+  'good',
+  'satisfactory',
+  'moderate',
+  'poor',
+  'very-poor',
+  'severe',
+])
+
+export const pollutantSchema = z.enum(['pm2_5', 'pm10', 'no2', 'so2', 'o3', 'co'])
+
+export const cityResultSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  latitude: z.number(),
+  longitude: z.number(),
+  timezone: z.string(),
+  country: z.string(),
+  admin1: z.string(),
+})
+
 export const geocodeResponseSchema = z.object({
   results: z
     .array(
-      z.object({
-        id: z.number(),
-        name: z.string(),
-        latitude: z.number(),
-        longitude: z.number(),
+      cityResultSchema.extend({
         timezone: z.string().optional(),
         country: z.string().optional(),
         admin1: z.string().optional(),
@@ -50,8 +67,17 @@ export const geocodeResponseSchema = z.object({
     .optional(),
 })
 
+export const geocodePayloadSchema = z.object({
+  results: z.array(cityResultSchema),
+})
+
 export const profileSchema = z.object({
-  city: z.string().min(1).max(80),
+  city: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .refine((value) => !/[\r\n\0]/.test(value), 'City name must be single-line'),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
   timezone: z.string().min(1).max(64),
@@ -149,8 +175,8 @@ export const airPayloadSchema = z.object({
     .extend({
       aqi: z.object({
         aqi: z.number(),
-        category: z.string(),
-        dominant: z.string().nullable(),
+        category: aqiCategorySchema,
+        dominant: pollutantSchema.nullable(),
         subIndices: z.record(z.number()),
       }),
     })
@@ -161,6 +187,8 @@ export const airPayloadSchema = z.object({
 })
 
 export type AirPayload = z.infer<typeof airPayloadSchema>
+export type CityResult = z.infer<typeof cityResultSchema>
+export type GeocodePayload = z.infer<typeof geocodePayloadSchema>
 /** What the model returns: the prose, with no provenance field. */
 export type PlanResponse = z.infer<typeof planResponseSchema>
 /** What the API returns: the prose plus who wrote it. */

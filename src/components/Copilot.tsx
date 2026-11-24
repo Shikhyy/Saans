@@ -1,7 +1,6 @@
 import { formatHour } from '../core/planner'
+import { dateLabel, fmt } from '../lib/format'
 import { useApp } from '../state/app'
-import { fmt } from '../lib/format'
-import { dateLabel } from '../lib/format'
 
 /**
  * The plan is printed, not chatted. It arrives as a slip: the household's day as an itinerary with
@@ -90,7 +89,11 @@ export function Copilot() {
           </div>
 
           <p className="slip__headline">
-            {plan ? plan.headline : planStatus === 'loading' ? t('plan.generating') : t('plan.empty')}
+            {plan
+              ? plan.headline
+              : planStatus === 'loading'
+                ? t('plan.generating')
+                : t('plan.empty')}
           </p>
           <p className="slip__summary">{plan ? plan.summary : t('plan.emptyBody')}</p>
 

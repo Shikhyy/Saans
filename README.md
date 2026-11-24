@@ -121,7 +121,7 @@ flowchart LR
 ## Engineering
 
 - **Stack:** Vite + React 19 + TypeScript (strict), raw Three.js, GSAP + ScrollTrigger, Lenis, Zod, Hono.
-- **Quality gates:** `tsc --noEmit`, `eslint`, `vitest` (87 tests / 7 files), coverage gate, `vite build`, Playwright e2e.
+- **Quality gates:** `tsc --noEmit`, `eslint`, `vitest` (102 tests / 8 files), coverage gate, `vite build`, Playwright e2e.
 - **Design gate:** `design-taste-frontend` — final audit **0 FAIL, 1 WARN** (no footage; defended).
 
 ## Getting started

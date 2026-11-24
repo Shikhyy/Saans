@@ -1,5 +1,3 @@
-export const numberFormat = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 })
-
 export function fmt(value: number, digits = 0): string {
   if (!Number.isFinite(value)) return '—'
   return new Intl.NumberFormat('en-IN', {

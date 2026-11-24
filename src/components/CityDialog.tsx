@@ -7,7 +7,7 @@ import { useApp } from '../state/app'
  * coordinates, a name and a timezone into the household profile — there is nothing else to store.
  */
 export function CityDialog({ onClose }: { onClose: () => void }) {
-  const { t, updateProfile, profile } = useApp()
+  const { t, tf, updateProfile, profile } = useApp()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<CityResult[]>([])
   const [status, setStatus] = useState<'idle' | 'loading' | 'empty' | 'error'>('idle')
@@ -97,9 +97,13 @@ export function CityDialog({ onClose }: { onClose: () => void }) {
   )
 
   return (
-    <div className="dialog" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose()
-    }}>
+    <div
+      className="dialog"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
       <div
         className="dialog__panel"
         role="dialog"
@@ -116,7 +120,7 @@ export function CityDialog({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <p className="note">Currently reading the forecast for {profile.city}.</p>
+        <p className="note">{tf('common.cityNote', { city: profile.city })}</p>
 
         <form
           className="search"
@@ -146,16 +150,11 @@ export function CityDialog({ onClose }: { onClose: () => void }) {
         </form>
 
         <div className="results" aria-live="polite">
-          {status === 'loading' && <p className="note">Searching…</p>}
-          {status === 'empty' && <p className="note">No place matched that name.</p>}
+          {status === 'loading' && <p className="note">{t('common.searching')}</p>}
+          {status === 'empty' && <p className="note">{t('common.noMatch')}</p>}
           {status === 'error' && <p className="note">{t('common.error')}</p>}
           {results.map((place) => (
-            <button
-              className="result"
-              key={place.id}
-              type="button"
-              onClick={() => choose(place)}
-            >
+            <button className="result" key={place.id} type="button" onClick={() => choose(place)}>
               <span>{place.name}</span>
               <span className="result__meta">
                 {[place.admin1, place.country].filter(Boolean).join(', ')}
@@ -164,10 +163,7 @@ export function CityDialog({ onClose }: { onClose: () => void }) {
           ))}
         </div>
 
-        <p className="note">
-          Search runs through this server against Open-Meteo Geocoding. The browser sends the word
-          you type and nothing else.
-        </p>
+        <p className="note">{t('common.cityPrivacy')}</p>
       </div>
     </div>
   )

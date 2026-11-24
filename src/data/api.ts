@@ -1,11 +1,15 @@
 import type { PlanFacts } from '../core/plan'
 import {
   airPayloadSchema,
+  geocodePayloadSchema,
   planPayloadSchema,
   type AirPayload,
+  type CityResult,
   type PlanPayload,
 } from '../core/schemas'
 import type { HouseholdProfile } from '../core/types'
+
+export type { CityResult }
 
 export class ApiError extends Error {
   constructor(
@@ -34,22 +38,11 @@ export async function fetchAir(
   return airPayloadSchema.parse(await json(response))
 }
 
-export interface CityResult {
-  id: number
-  name: string
-  latitude: number
-  longitude: number
-  timezone: string
-  country: string
-  admin1: string
-}
-
 export async function searchCities(query: string, signal: AbortSignal): Promise<CityResult[]> {
   const url = new URL('/api/geocode', window.location.origin)
   url.searchParams.set('q', query)
   const response = await fetch(url, { signal, headers: { Accept: 'application/json' } })
-  const payload = (await json(response)) as { results?: CityResult[] }
-  return payload.results ?? []
+  return geocodePayloadSchema.parse(await json(response)).results
 }
 
 export async function requestPlan(

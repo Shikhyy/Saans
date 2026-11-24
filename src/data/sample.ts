@@ -1,6 +1,6 @@
 import type { AirPayload } from '../core/schemas'
 import type { HourPoint } from '../core/types'
-import { computeAqi } from '../core/aqi'
+import { aqiFromPoint } from '../core/aqi'
 
 /**
  * A deterministic sample forecast, used only when both the network and the last saved copy are
@@ -55,14 +55,7 @@ export function samplePayload(): AirPayload {
     current: currentPoint
       ? {
           ...currentPoint,
-          aqi: computeAqi({
-            pm2_5: currentPoint.pm25,
-            pm10: currentPoint.pm10,
-            no2: currentPoint.no2,
-            so2: currentPoint.so2,
-            o3: currentPoint.o3,
-            co: currentPoint.co,
-          }),
+          aqi: aqiFromPoint(currentPoint),
         }
       : null,
     fetchedAt: new Date().toISOString(),

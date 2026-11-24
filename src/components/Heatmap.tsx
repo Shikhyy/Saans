@@ -24,14 +24,12 @@ export interface HeatmapProps {
  */
 export function Heatmap({ samples, lat, lon, hours, bounds, cellKm = 12 }: HeatmapProps) {
   const cells = useMemo(() => {
-    const box =
-      bounds ??
-      {
-        south: lat - 0.12,
-        north: lat + 0.12,
-        west: lon - (0.12 / Math.max(Math.cos((lat * Math.PI) / 180), 0.01)),
-        east: lon + (0.12 / Math.max(Math.cos((lat * Math.PI) / 180), 0.01)),
-      }
+    const box = bounds ?? {
+      south: lat - 0.12,
+      north: lat + 0.12,
+      west: lon - 0.12 / Math.max(Math.cos((lat * Math.PI) / 180), 0.01),
+      east: lon + 0.12 / Math.max(Math.cos((lat * Math.PI) / 180), 0.01),
+    }
     return exposureGrid(samples, hours, box, cellKm)
   }, [samples, lat, lon, hours, bounds, cellKm])
 

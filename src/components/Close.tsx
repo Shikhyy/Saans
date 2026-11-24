@@ -1,33 +1,17 @@
-import { useState } from 'react'
-import { whoMultiple } from '../core/aqi'
-import { formatHour } from '../core/planner'
+import { useCallback } from 'react'
 import { fmt } from '../lib/format'
-import { shareCard } from '../lib/export'
+import { useSharePlan } from '../lib/useSharePlan'
 import { useApp } from '../state/app'
 
 export function Close() {
-  const { t, profile, today, pm25, dose, budget, cleanWindow } = useApp()
-  const [state, setState] = useState<'idle' | 'working' | 'done'>('idle')
+  const { t, profile, dose } = useApp()
 
-  const download = async () => {
-    setState('working')
-    const result = await shareCard({
-      city: profile.city,
-      date: today?.date ?? '',
-      pm25,
-      multiple: whoMultiple(pm25),
-      dose,
-      budget,
-      window: cleanWindow,
-      headline: `The cleanest window in ${profile.city} today is ${
-        cleanWindow
-          ? `${formatHour(cleanWindow.startHour)}–${formatHour(cleanWindow.endHour)}`
-          : 'not available'
-      }. Our day costs ${fmt(dose)} µg of PM2.5.`,
-      url: window.location.origin,
-    })
-    setState(result === 'failed' ? 'idle' : 'done')
-  }
+  const buildHeadline = useCallback(
+    (windowLabel: string) =>
+      `The cleanest window in ${profile.city} today is ${windowLabel}. Our day costs ${fmt(dose)} µg of PM2.5.`,
+    [profile.city, dose],
+  )
+  const [state, download] = useSharePlan(buildHeadline)
 
   return (
     <section className="close" aria-labelledby="close-title" data-parallax-section>
@@ -56,6 +40,7 @@ export function Close() {
             type="button"
             onClick={() => void download()}
             disabled={state === 'working'}
+            aria-busy={state === 'working'}
             data-reveal-item
           >
             {state === 'working'

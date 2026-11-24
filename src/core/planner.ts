@@ -106,31 +106,28 @@ export function pm25At(points: HourPoint[], hour: number): number | null {
   return a + (b - a) * (normalised - base)
 }
 
+/** Return the nearest forecast entry for decimal `hour`, wrapping modulo 24. */
 export function pointAt(points: HourPoint[], hour: number): HourPoint | null {
   const target = Math.round(((hour % 24) + 24) % 24)
   return points.find((point) => point.hour === target) ?? null
 }
 
-export function routineDose(
-  routine: Routine,
-  points: HourPoint[],
-  indoorPm25: number,
-): number {
+/** Calculate inhaled PM2.5 mass (µg) for one routine given hourly ambient readings and indoor concentration. */
+export function routineDose(routine: Routine, points: HourPoint[], indoorPm25: number): number {
   if (routine.place === 'indoor') return inhaledUg(indoorPm25, routine.minutes, routine.activity)
   const ambient = pm25At(points, routine.start)
   if (ambient == null) return 0
-  const factor = routine.place === 'commute' && routine.mode ? MODES[routine.mode].exposureFactor : 1
+  const factor =
+    routine.place === 'commute' && routine.mode ? MODES[routine.mode].exposureFactor : 1
   return inhaledUg(ambient * factor, routine.minutes, routine.activity)
 }
 
-export function dayDose(
-  routines: Routine[],
-  points: HourPoint[],
-  indoorPm25: number,
-): number {
+/** Sum daily inhaled PM2.5 mass (µg) across all scheduled routines. */
+export function dayDose(routines: Routine[], points: HourPoint[], indoorPm25: number): number {
   return routines.reduce((sum, routine) => sum + routineDose(routine, points, indoorPm25), 0)
 }
 
+/** Compute mean PM2.5 across a window starting at `startHour` sampled in 15-minute increments. */
 export function meanPm25(
   points: HourPoint[],
   startHour: number,
@@ -169,8 +166,24 @@ export function cleanestWindow(
   return best
 }
 
+/** Clamp a routine's start hour inside the 24-hour day. */
 export function moveRoutine(routine: Routine, start: number): Routine {
   return { ...routine, start: Math.max(0, Math.min(23.75, start)) }
+}
+
+/** Place every movable routine sequentially inside `window`, respecting each routine's duration. */
+export function fitRoutinesInWindow(routines: Routine[], window: CleanWindow): Routine[] {
+  let cursor = window.startHour
+  return routines.map((routine) => {
+    if (!routine.movable) return routine
+    const duration = routine.minutes / 60
+    const start = Math.min(
+      Math.max(window.startHour, window.endHour - duration),
+      Math.max(window.startHour, cursor),
+    )
+    cursor = Math.min(window.endHour, start + duration + 0.25)
+    return moveRoutine(routine, start)
+  })
 }
 
 export interface ShiftSuggestion {
@@ -204,6 +217,7 @@ export function bestShiftFor(
   return best
 }
 
+/** Format a decimal hour (`0–24`) as a zero-padded `HH:MM` 24-hour clock string. */
 export function formatHour(hour: number): string {
   const normalised = ((hour % 24) + 24) % 24
   const whole = Math.floor(normalised)

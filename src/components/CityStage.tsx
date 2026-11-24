@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import type { CityScene, Quality } from '../three/CityScene'
-import { useApp } from '../state/app'
-import { useReducedMotion } from '../lib/hooks'
-import { pm25At, pointAt } from '../core/planner'
+import { formatHour, pm25At, pointAt } from '../core/planner'
 import { clamp, fmt } from '../lib/format'
+import { useReducedMotion } from '../lib/hooks'
+import { supportsWebGL } from '../lib/webgl'
+import { useApp } from '../state/app'
+import type { CityScene, Quality } from '../three/CityScene'
 
 function detectQuality(): Quality {
   const cores = navigator.hardwareConcurrency ?? 4
@@ -13,22 +14,13 @@ function detectQuality(): Quality {
   return 'low'
 }
 
-function supportsWebGL(): boolean {
-  try {
-    const canvas = document.createElement('canvas')
-    return Boolean(canvas.getContext('webgl2') ?? canvas.getContext('webgl'))
-  } catch {
-    return false
-  }
-}
-
 /**
  * The fixed half of the page. The city is the clock: the scroll walks the hour from 05:00 to
  * midnight and the haze, the sun and the street lights follow the same forecast the planner reads.
  * At the end of the spread the simulation crossfades to a real photograph of the same night.
  */
 export function CityStage() {
-  const { pm25, today, t } = useApp()
+  const { pm25, today, t, language } = useApp()
   const reduced = useReducedMotion()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const plateRef = useRef<HTMLDivElement | null>(null)
@@ -62,12 +54,7 @@ export function CityStage() {
       const hour = 5 + progress * 19
       clockRef.current = hour
 
-      const whole = Math.floor(hour)
-      const minutes = Math.round((hour - whole) * 60)
-      const label = `${String(minutes === 60 ? (whole + 1) % 24 : whole).padStart(2, '0')}:${String(
-        minutes === 60 ? 0 : minutes,
-      ).padStart(2, '0')}`
-      if (hourRef.current) hourRef.current.textContent = label
+      if (hourRef.current) hourRef.current.textContent = formatHour(hour)
 
       const points = pointsRef.current
       const value = points.length ? pm25At(points, hour) : pmValueRef.current
@@ -137,7 +124,7 @@ export function CityStage() {
   }, [pm25])
 
   return (
-    <aside className="split__stage" id="stage">
+    <aside className="split__stage" id="stage" aria-label={t('stage.landmark')}>
       <div className="stage__view">
         {failed ? (
           <div className="stage__fallback">
@@ -151,13 +138,9 @@ export function CityStage() {
             />
           </div>
         ) : (
-          <canvas ref={canvasRef} />
+          <canvas ref={canvasRef} aria-hidden="true" />
         )}
-        <div
-          className="stage__plate"
-          ref={plateRef}
-          aria-hidden="true"
-        >
+        <div className="stage__plate" ref={plateRef} aria-hidden="true">
           <img
             src="/img/lamp-900.jpg"
             srcSet="/img/lamp-520.jpg 520w, /img/lamp-900.jpg 900w, /img/lamp-1600.jpg 1600w"
@@ -195,7 +178,9 @@ export function CityStage() {
         <div className="sr-only">
           {today.points.map((point) => (
             <span key={point.time}>
-              {point.hour}:00, {Math.round(point.pm25 ?? 0)} micrograms per cubic metre.
+              {language === 'hi'
+                ? `${formatHour(point.hour)} बजे, ${Math.round(point.pm25 ?? 0)} माइक्रोग्राम प्रति घन मीटर।`
+                : `${point.hour}:00, ${Math.round(point.pm25 ?? 0)} micrograms per cubic metre.`}
             </span>
           ))}
         </div>

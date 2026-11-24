@@ -76,30 +76,45 @@ function kernelWeight(sample: ExposureSample, query: ExposureQuery, thetaKm: num
   return weight * Math.exp(-(d * d) / (2 * thetaKm * thetaKm))
 }
 
+/**
+ * Estimate smoothed PM2.5 concentration and neighbourhood spread at a single `(lat, lon, hour)` query
+ * using a Gaussian radial basis function kernel over nearby forecast samples.
+ */
 export function exposureAt(
   samples: ExposureSample[],
   query: ExposureQuery,
   thetaKm = 12,
 ): ExposureEstimate {
+  const bandwidthKm = Number.isFinite(thetaKm) && thetaKm > 0 ? thetaKm : 12
+  const validSamples = samples.filter(
+    (s) =>
+      Number.isFinite(s.lat) &&
+      Number.isFinite(s.lon) &&
+      Number.isFinite(s.hour) &&
+      Number.isFinite(s.pm25),
+  )
   const radiusKm = query.radiusKm
-  const inRadius = radiusKm === undefined ? samples : samples.filter((s) => distanceKm(s, query) <= radiusKm)
+  const inRadius =
+    radiusKm === undefined
+      ? validSamples
+      : validSamples.filter((s) => distanceKm(s, query) <= radiusKm)
   const contributing = inRadius
-    .map((sample) => ({ sample, weight: kernelWeight(sample, query, thetaKm) }))
+    .map((sample) => ({ sample, weight: kernelWeight(sample, query, bandwidthKm) }))
     .filter((entry) => entry.weight > 0)
 
   if (contributing.length === 0) {
-    const nearest = inRadius
-      .slice()
-      .sort((a, b) => distanceKm(a, b) - distanceKm(b, a))[0]
+    const nearest = inRadius.slice().sort((a, b) => distanceKm(a, query) - distanceKm(b, query))[0]
     const fallback = nearest ? nearest.pm25 : 0
     const fallbackDistance = nearest ? distanceKm(nearest, query) : (query.radiusKm ?? 0)
     return { value: fallback, spread: 0, distanceKm: fallbackDistance, sampleCount: 0 }
   }
 
   const totalWeight = contributing.reduce((sum, entry) => sum + entry.weight, 0)
-  const value = contributing.reduce((sum, entry) => sum + entry.weight * entry.sample.pm25, 0) / totalWeight
+  const value =
+    contributing.reduce((sum, entry) => sum + entry.weight * entry.sample.pm25, 0) / totalWeight
   const spread = Math.sqrt(
-    contributing.reduce((sum, entry) => sum + entry.weight * (entry.sample.pm25 - value) ** 2, 0) / totalWeight,
+    contributing.reduce((sum, entry) => sum + entry.weight * (entry.sample.pm25 - value) ** 2, 0) /
+      totalWeight,
   )
   const nearestEntry = contributing.reduce((best, entry) =>
     distanceKm(entry.sample, query) < distanceKm(best.sample, query) ? entry : best,
@@ -113,6 +128,10 @@ export function exposureAt(
   }
 }
 
+/**
+ * Evaluate the exposure surface across a regular spatial grid covering `bounds` at `hours`.
+ * Returns an empty array when `cellKm` is non-positive or `bounds` are inverted.
+ */
 export function exposureGrid(
   samples: ExposureSample[],
   hours: number,
@@ -120,6 +139,9 @@ export function exposureGrid(
   cellKm: number,
   thetaKm = 12,
 ): GridCell[] {
+  if (!Number.isFinite(cellKm) || cellKm <= 0) return []
+  if (bounds.north < bounds.south || bounds.east < bounds.west) return []
+
   const latStep = cellKm / 111.32
   const lonStep = cellKm / (111.32 * Math.max(Math.cos((bounds.south * Math.PI) / 180), 0.01))
   const cells: GridCell[] = []
@@ -130,7 +152,6 @@ export function exposureGrid(
     for (let column = 0; column < columns; column += 1) {
       const lat = Math.min(bounds.north, bounds.south + (row + 0.5) * latStep)
       const lon = Math.min(bounds.east, bounds.west + (column + 0.5) * lonStep)
-      if (lon > bounds.east || lat > bounds.north) continue
       const estimate = exposureAt(samples, { lat, lon, hour: hours }, thetaKm)
       cells.push({ lat, lon, value: estimate.value, spread: estimate.spread })
     }

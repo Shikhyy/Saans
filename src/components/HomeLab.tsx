@@ -1,13 +1,10 @@
 import { useEffect, useRef } from 'react'
-import {
-  COOKING_GENERATION_UG_PER_H,
-  COOKING_HOURS_PER_DAY,
-  DWELLING_LABEL,
-  FUEL_LABEL,
-} from '../core/indoor'
+import { COOKING_GENERATION_UG_PER_H, COOKING_HOURS_PER_DAY } from '../core/indoor'
 import type { Dwelling, Fuel } from '../core/types'
 import { useApp } from '../state/app'
 import { useInView, useReducedMotion } from '../lib/hooks'
+import { DWELLING_LABEL_I18N, FUEL_LABEL_I18N } from '../lib/i18n'
+import { supportsWebGL } from '../lib/webgl'
 import type { RoomScene } from '../three/RoomScene'
 import { fmt, hazeColor, inr } from '../lib/format'
 
@@ -15,16 +12,28 @@ const DWELLINGS: Dwelling[] = ['one-room', 'apartment', 'house']
 const FUELS: Fuel[] = ['lpg', 'biomass', 'mixed', 'none']
 
 export function HomeLab() {
-  const { t, tf, profile, updateProfile, indoor, hacks, pm25 } = useApp()
+  const { t, tf, language, profile, updateProfile, indoor, hacks, pm25 } = useApp()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const sceneRef = useRef<RoomScene | null>(null)
   const [stageRef, inView] = useInView<HTMLDivElement>({ threshold: 0.15 })
   const reduced = useReducedMotion()
   const purifierOn = profile.purifierCadr > 0
+  const latestRef = useRef({
+    indoorPm25: indoor.cookingPeakPm25,
+    haze: hazeColor(pm25),
+    purifierOn,
+    active: inView && !reduced,
+  })
+  latestRef.current = {
+    indoorPm25: indoor.cookingPeakPm25,
+    haze: hazeColor(pm25),
+    purifierOn,
+    active: inView && !reduced,
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas || !supportsWebGL()) return
     let cancelled = false
     let scene: RoomScene | null = null
     void import('../three/RoomScene')
@@ -36,9 +45,10 @@ export function HomeLab() {
           return
         }
         sceneRef.current = scene
-        scene.setIndoor(indoor.cookingPeakPm25, hazeColor(pm25))
-        scene.setPurifier(purifierOn)
-        scene.setActive(inView && !reduced)
+        const snapshot = latestRef.current
+        scene.setIndoor(snapshot.indoorPm25, snapshot.haze)
+        scene.setPurifier(snapshot.purifierOn)
+        scene.setActive(snapshot.active)
       })
       .catch(() => undefined)
     return () => {
@@ -133,7 +143,7 @@ export function HomeLab() {
                           aria-pressed={profile.fuel === fuel}
                           onClick={() => updateProfile({ fuel })}
                         >
-                          {FUEL_LABEL[fuel]}
+                          {FUEL_LABEL_I18N[language][fuel]}
                         </button>
                       ))}
                     </div>
@@ -178,7 +188,7 @@ export function HomeLab() {
                           aria-pressed={profile.dwelling === dwelling}
                           onClick={() => updateProfile({ dwelling })}
                         >
-                          {DWELLING_LABEL[dwelling]}
+                          {DWELLING_LABEL_I18N[language][dwelling]}
                         </button>
                       ))}
                     </div>

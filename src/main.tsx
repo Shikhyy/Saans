@@ -3,6 +3,7 @@ import './styles/app.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { AppProvider } from './state/app'
 
 const root = document.getElementById('root')
@@ -16,9 +17,11 @@ if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
 
 createRoot(root).render(
   <StrictMode>
-    <AppProvider>
-      <App />
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <App />
+      </AppProvider>
+    </ErrorBoundary>
   </StrictMode>,
 )
 

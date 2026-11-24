@@ -1,21 +1,18 @@
-const BREAKPOINTS = [
-  ['0–30', '0–50', 'Good'],
-  ['31–60', '51–100', 'Satisfactory'],
-  ['61–90', '101–200', 'Moderate'],
-  ['91–120', '201–300', 'Poor'],
-  ['121–250', '301–400', 'Very poor'],
-  ['251–500', '401–500', 'Severe'],
-]
+import { aqiCategory, CATEGORY_LABEL, PM25_BREAKPOINTS } from '../core/aqi'
+import { MODES } from '../core/modes'
 
-const MODES = [
-  ['Walk', '0', '₹0', '1.00'],
-  ['Cycle', '0', '₹0', '1.15'],
-  ['Bus', '55', '₹1.5', '0.85'],
-  ['Metro', '25', '₹2.5', '0.35'],
-  ['Car', '130', '₹8.5', '0.90'],
-  ['Two-wheeler', '45', '₹3.2', '1.05'],
-  ['Auto', '70', '₹12', '1.05'],
-]
+const BREAKPOINT_ROWS = PM25_BREAKPOINTS.map((bp) => [
+  `${bp.cLow === 0 ? 0 : bp.cLow + 1}–${bp.cHigh}`,
+  `${bp.iLow}–${bp.iHigh}`,
+  CATEGORY_LABEL[aqiCategory(bp.iHigh)],
+])
+
+const MODE_ROWS = Object.values(MODES).map((mode) => [
+  mode.label,
+  String(mode.co2GPerKm),
+  `₹${mode.costInrPerKm}`,
+  mode.exposureFactor.toFixed(2),
+])
 
 export function Method() {
   return (
@@ -46,7 +43,7 @@ export function Method() {
 
           <div>
             <section className="method__section" id="aqi">
-              <h3>The AQI is the worst pollutant, not the average</h3>
+              <h2>The AQI is the worst pollutant, not the average</h2>
               <p>
                 India’s National AQI, published by the Central Pollution Control Board, computes a
                 sub-index for each pollutant and reports the highest one. Averaging them is a common
@@ -73,7 +70,7 @@ export function Method() {
                   </tr>
                 </thead>
                 <tbody>
-                  {BREAKPOINTS.map(([concentration, index, category]) => (
+                  {BREAKPOINT_ROWS.map(([concentration, index, category]) => (
                     <tr key={category}>
                       <td className="num">{concentration}</td>
                       <td className="num">{index}</td>
@@ -85,11 +82,11 @@ export function Method() {
             </section>
 
             <section className="method__section" id="exposure">
-              <h3>Exposure is mass, not a score</h3>
+              <h2>Exposure is mass, not a score</h2>
               <p>
                 The app counts the mass of PM2.5 a person actually draws in. Minute ventilation by
-                activity comes from the US EPA Exposure Factors Handbook: about 6 L/min at rest,
-                12 L/min light, 25 moderate, 50 vigorous.
+                activity comes from the US EPA Exposure Factors Handbook: about 6 L/min at rest, 12
+                L/min light, 25 moderate, 50 vigorous.
               </p>
               <pre className="formula">
                 inhaled (µg) = concentration (µg/m³) × ventilation (m³/min) × minutes
@@ -109,7 +106,7 @@ export function Method() {
             </section>
 
             <section className="method__section" id="indoor">
-              <h3>The indoor model is a single-zone mass balance</h3>
+              <h2>The indoor model is a single-zone mass balance</h2>
               <pre className="formula">
                 C_in = (P × C_out × ACH_inf + G / V) / (ACH_inf + CADR / V)
               </pre>
@@ -129,7 +126,7 @@ export function Method() {
             </section>
 
             <section className="method__section" id="impact">
-              <h3>What a switch buys</h3>
+              <h2>What a switch buys</h2>
               <p>
                 A commute comparison holds distance constant and changes the concentration the
                 traveller sits in, the breathing rate, and the time exposed. The exposure factor is
@@ -146,7 +143,7 @@ export function Method() {
                   </tr>
                 </thead>
                 <tbody>
-                  {MODES.map(([mode, co2, cost, factor]) => (
+                  {MODE_ROWS.map(([mode, co2, cost, factor]) => (
                     <tr key={mode}>
                       <td>{mode}</td>
                       <td className="num">{co2}</td>
@@ -165,23 +162,23 @@ export function Method() {
             </section>
 
             <section className="method__section" id="ward">
-              <h3>The ward is a scenario, and it is labelled as one</h3>
+              <h2>The ward is a scenario, and it is labelled as one</h2>
               <p>
                 Ward mode multiplies households by per-household emission factors to answer “what
                 changes if this street stops burning wood”. It does not claim to predict the ambient
                 concentration on that street, which would need a dispersion model and a lot of
-                meteorology. The exposure-saved figure is the same mass-balance model as the kitchen,
-                applied to the people who switch.
+                meteorology. The exposure-saved figure is the same mass-balance model as the
+                kitchen, applied to the people who switch.
               </p>
               <p>
                 The street heatmap is an exposure surface: a kernel regression over the night’s
-                readings, smoothed and given a spread. It is a model of the air, not a measurement of
-                it, and the figures beneath it are still the mass-balance numbers.
+                readings, smoothed and given a spread. It is a model of the air, not a measurement
+                of it, and the figures beneath it are still the mass-balance numbers.
               </p>
             </section>
 
             <section className="method__section" id="data">
-              <h3>Data and licences</h3>
+              <h2>Data and licences</h2>
               <ul>
                 <li>
                   Air quality and weather: Open-Meteo (CC BY 4.0), free and keyless. Hourly PM2.5,
@@ -226,7 +223,7 @@ export function Method() {
             </section>
 
             <section className="method__section" id="security">
-              <h3>Security</h3>
+              <h2>Security</h2>
               <ul>
                 <li>
                   The Gemini key lives only in the server environment. The browser never receives it
@@ -256,7 +253,7 @@ export function Method() {
             </section>
 
             <section className="method__section" id="access">
-              <h3>Accessibility</h3>
+              <h2>Accessibility</h2>
               <ul>
                 <li>WCAG 2.2 AA targets, checked with axe in the test suite and by keyboard.</li>
                 <li>
@@ -264,8 +261,8 @@ export function Method() {
                   screen readers, and every number appears in the document, not only in canvas.
                 </li>
                 <li>
-                  The routine timeline is a set of sliders. Tab to a block, use arrow keys to move it
-                  by 15 minutes, shift for an hour, Home and End for the day.
+                  The routine timeline is a set of sliders. Tab to a block, use arrow keys to move
+                  it by 15 minutes, shift for an hour, Home and End for the day.
                 </li>
                 <li>
                   Reduced motion stops the camera and the particles and reveals all content without
@@ -280,38 +277,38 @@ export function Method() {
             </section>
 
             <section className="method__section" id="tests">
-              <h3>Tests</h3>
+              <h2>Tests</h2>
               <p>
                 The domain layer imports nothing from React, the DOM or the network, so it is tested
                 directly. Unit tests cover CPCB sub-indices and category edges, the inhaled-mass
                 arithmetic, the indoor mass balance, clean-window search, routine shifting, commute
-                and fuel comparisons, the ward scenario, and the deterministic plan engine. Component
-                tests cover the timeline keyboard contract and the plan rendering. Network calls are
-                mocked with MSW. axe runs against the rendered page.
+                and fuel comparisons, the ward scenario, and the deterministic plan engine.
+                Component tests cover the timeline keyboard contract and the plan rendering. Network
+                calls are mocked with MSW. axe runs against the rendered page.
               </p>
               <pre className="formula">
                 npm test &nbsp;·&nbsp; npm run test:coverage &nbsp;·&nbsp; npm run test:e2e
               </pre>
               <p>
-                87 tests run in seven files: CPCB sub-indices and every band edge, the inhaled-mass
-                arithmetic, the indoor mass balance and the intervention ranking, clean-window
-                search and routine shifting, commute and fuel comparisons, the ward scenario, the
-                plan engine in both languages, the Zod contracts, the server's SSRF allowlist and
-                request guards, the timeline's keyboard contract, and an axe pass over the rendered
-                planner, and the exposure surface. The domain layer is at 98% statement coverage.
+                Automated suites verify CPCB sub-indices and every band edge, the inhaled-mass
+                arithmetic, the indoor mass balance and intervention ranking, clean-window search
+                and routine shifting, commute and fuel comparisons, the ward scenario, the plan
+                engine in both languages, the Zod contracts, the server's SSRF allowlist and request
+                guards, origin checks, the timeline's keyboard contract, error recovery, and axe
+                accessibility passes. The domain layer sits well above 90% statement coverage.
               </p>
             </section>
 
             <section className="method__section" id="limits">
-              <h3>What this cannot do</h3>
+              <h2>What this cannot do</h2>
               <ul>
                 <li>
                   It does not measure your air. It reads a forecast grid cell that may be kilometres
                   from your street.
                 </li>
                 <li>
-                  The exposure index is not a dose to your lungs and not a health prediction. It is a
-                  relative planning number.
+                  The exposure index is not a dose to your lungs and not a health prediction. It is
+                  a relative planning number.
                 </li>
                 <li>
                   It does not replace medical advice. People with asthma, heart disease or who are

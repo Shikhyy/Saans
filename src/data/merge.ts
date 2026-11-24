@@ -56,16 +56,3 @@ export function groupDays(points: HourPoint[]): DaySeries[] {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, dayPoints]) => ({ date, points: dayPoints }))
 }
-
-/** The hour of the day we are in, in the location's own timezone, from the local ISO strings. */
-export function localNow(points: HourPoint[], now = new Date()): HourPoint | null {
-  const localHour = Number(
-    new Intl.DateTimeFormat('en-GB', {
-      hour: '2-digit',
-      hour12: false,
-      timeZone: 'UTC',
-    }).format(now),
-  )
-  if (points.length === 0) return null
-  return points.find((point) => point.hour === localHour) ?? points[0] ?? null
-}

@@ -6,7 +6,12 @@ import type { StringKey } from '../lib/i18n'
 const CHAPTERS: { hours: StringKey; title: StringKey; body: StringKey; at: number }[] = [
   { hours: 'chapter.one.hours', title: 'chapter.one.title', body: 'chapter.one.body', at: 7 },
   { hours: 'chapter.two.hours', title: 'chapter.two.title', body: 'chapter.two.body', at: 14 },
-  { hours: 'chapter.three.hours', title: 'chapter.three.title', body: 'chapter.three.body', at: 20 },
+  {
+    hours: 'chapter.three.hours',
+    title: 'chapter.three.title',
+    body: 'chapter.three.body',
+    at: 20,
+  },
 ]
 
 /**

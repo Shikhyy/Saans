@@ -5,13 +5,7 @@
 
 export type Pollutant = 'pm2_5' | 'pm10' | 'no2' | 'so2' | 'o3' | 'co'
 
-export type AqiCategory =
-  | 'good'
-  | 'satisfactory'
-  | 'moderate'
-  | 'poor'
-  | 'very-poor'
-  | 'severe'
+export type AqiCategory = 'good' | 'satisfactory' | 'moderate' | 'poor' | 'very-poor' | 'severe'
 
 export type Activity = 'rest' | 'light' | 'moderate' | 'vigorous'
 
@@ -23,14 +17,7 @@ export type Fuel = 'lpg' | 'biomass' | 'mixed' | 'none'
 
 export type Dwelling = 'one-room' | 'apartment' | 'house'
 
-export type CommuteMode =
-  | 'walk'
-  | 'cycle'
-  | 'bus'
-  | 'metro'
-  | 'car'
-  | 'two-wheeler'
-  | 'auto'
+export type CommuteMode = 'walk' | 'cycle' | 'bus' | 'metro' | 'car' | 'two-wheeler' | 'auto'
 
 /** One local hour of air + weather. Values are null when the upstream grid has no reading. */
 export interface HourPoint {

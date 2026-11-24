@@ -1,4 +1,4 @@
-import type { HealthProfile } from '../core/types'
+import type { Dwelling, Fuel, HealthProfile } from '../core/types'
 
 export type Language = 'en' | 'hi'
 
@@ -9,6 +9,7 @@ const en = {
   'nav.method': 'Method',
   'nav.city': 'City',
   'nav.language': 'हिन्दी',
+  'nav.homeLabel': 'SAANS home',
 
   'hero.title': 'Your family has a breath budget.',
   'hero.lede':
@@ -24,6 +25,7 @@ const en = {
   'stage.hour': 'Hour',
   'stage.pm': 'PM2.5',
   'stage.layer': 'Boundary layer',
+  'stage.landmark': 'City air quality simulation',
 
   'chapter.one.hours': '05–09',
   'chapter.one.title': 'The lid is still on the city.',
@@ -62,6 +64,7 @@ const en = {
   'day.saved': 'saved by moving {label} to {hour}.',
   'day.drag': 'Drag to move, arrow keys to nudge',
   'day.indoors': '{pm} µg/m³ indoors',
+  'day.summary': 'Daily exposure budget summary',
   'day.curve': 'PM2.5 through the day',
   'day.curveLabel': 'Lowest {low} µg/m³ at {lowHour}; highest {high} at {highHour}.',
 
@@ -107,9 +110,9 @@ const en = {
   'ward.recess': 'School recess, decided',
   'ward.recessBody':
     '{current} µg/m³ at 10:30 against {best} µg/m³ in the clean window. Moving recess there means {saved} mg of PM2.5 the whole school does not breathe, every day.',
-  'ward.recessNote':
-    'The cleanest 45 minutes between 08:00 and 16:00, for 400 children.',
-  'ward.scenario': 'Ward figures are a bottom-up scenario for {city}, not a measurement of the air.',
+  'ward.recessNote': 'The cleanest 45 minutes between 08:00 and 16:00, for 400 children.',
+  'ward.scenario':
+    'Ward figures are a bottom-up scenario for {city}, not a measurement of the air.',
   'ward.heatmap': 'Smoothed exposure across the street.',
   'ward.heatmapNote':
     'A kernel-smoothed surface over tonight’s forecast, with a spread wherever the readings run out.',
@@ -163,6 +166,7 @@ const en = {
 
   'common.retry': 'Retry',
   'common.close': 'Close',
+  'common.skip': 'Skip to content',
   'common.search': 'Search',
   'common.share': 'Share card',
   'common.calendar': 'Add clean hour to calendar',
@@ -172,6 +176,9 @@ const en = {
   'common.cityNote': 'Currently reading the forecast for {city}.',
   'common.cityPrivacy':
     'Search runs through this server against Open-Meteo Geocoding. The browser sends the word you type and nothing else.',
+  'error.title': 'Something interrupted the display.',
+  'error.body': 'Your saved household settings are safe. Reload the view to continue.',
+  'error.reset': 'Reload view',
 } as const
 
 export type StringKey = keyof typeof en
@@ -183,6 +190,7 @@ const hi: Record<StringKey, string> = {
   'nav.method': 'विधि',
   'nav.city': 'शहर',
   'nav.language': 'English',
+  'nav.homeLabel': 'SAANS मुखपृष्ठ',
 
   'hero.title': 'आपके परिवार के पास साँस का बजट है।',
   'hero.lede':
@@ -198,6 +206,7 @@ const hi: Record<StringKey, string> = {
   'stage.hour': 'समय',
   'stage.pm': 'PM2.5',
   'stage.layer': 'सीमा परत',
+  'stage.landmark': 'शहर वायु गुणवत्ता अनुकरण',
 
   'chapter.one.hours': '05–09',
   'chapter.one.title': 'शहर पर ढक्कन अभी बना है।',
@@ -236,6 +245,7 @@ const hi: Record<StringKey, string> = {
   'day.saved': '{label} को {hour} पर ले जाने से बचत।',
   'day.drag': 'खींचें, तीर कुंजियों से आगे बढ़ाएँ',
   'day.indoors': 'घर के अंदर {pm} µg/m³',
+  'day.summary': 'दैनिक संपर्क बजट सारांश',
   'day.curve': 'दिन भर PM2.5',
   'day.curveLabel': 'सबसे कम {low} µg/m³ {lowHour} पर; सबसे ज़्यादा {high} {highHour} पर।',
 
@@ -283,9 +293,8 @@ const hi: Record<StringKey, string> = {
     '10:30 पर {current} µg/m³ बनाम साफ़ खिड़की में {best} µg/m³। छुट्टी वहाँ ले जाने से पूरा स्कूल रोज़ {saved} mg PM2.5 साँस में नहीं लेता।',
   'ward.recessNote': '08:00 से 16:00 के बीच सबसे साफ़ 45 मिनट, 400 बच्चों के लिए।',
   'ward.scenario': 'ये आँकड़े {city} के लिए नीचे से बनाया परिदृश्य हैं, हवा की माप नहीं।',
-  'ward.heatmap': 'गली में समान रूप से समायोजित हवा।',
-  'ward.heatmapNote':
-    'आज रात की फ़ोरकेस्ट पर कर्नेल समायोजित सतह, जहाँ पढ़ने की कमी होती है त्यागें।',
+  'ward.heatmap': 'गली में समायोजित संपर्क सतह।',
+  'ward.heatmapNote': 'आज रात के पूर्वानुमान पर कर्नेल-समायोजित सतह, जहाँ आँकड़े कम हों वहाँ फैलाव के साथ।',
 
   'plan.title': 'योजना माँगिए।',
   'plan.note':
@@ -331,11 +340,11 @@ const hi: Record<StringKey, string> = {
   'footer.reading': '{city} का पूर्वानुमान पढ़ रहे हैं।',
   'footer.disclaimer':
     'SAANS सार्वजनिक पूर्वानुमान से संपर्क का अनुमान लगाता है। यह चिकित्सा उपकरण नहीं है और रोग नहीं बताता। घर में दमा, हृदय रोग या गर्भावस्था हो तो डॉक्टर की सलाह लें।',
-  'footer.credit':
-    'हवा और मौसम: Open-Meteo, CC BY 4.0. AQI: CPCB राष्ट्रीय AQI. सीमा: WHO 2021.',
+  'footer.credit': 'हवा और मौसम: Open-Meteo, CC BY 4.0. AQI: CPCB राष्ट्रीय AQI. सीमा: WHO 2021.',
 
   'common.retry': 'फिर कोशिश करें',
   'common.close': 'बंद करें',
+  'common.skip': 'मुख्य सामग्री पर जाएँ',
   'common.search': 'खोजें',
   'common.share': 'शेयर कार्ड',
   'common.calendar': 'साफ़ घंटा कैलेंडर में जोड़ें',
@@ -345,6 +354,9 @@ const hi: Record<StringKey, string> = {
   'common.cityNote': 'अभी {city} का पूर्वानुमान पढ़ रहे हैं।',
   'common.cityPrivacy':
     'खोज इसी सर्वर से Open-Meteo Geocoding तक जाती है। ब्राउज़र केवल आपका लिखा शब्द भेजता है।',
+  'error.title': 'प्रदर्शन में कोई त्रुटि आई।',
+  'error.body': 'आपकी सहेजी गई सेटिंग्स सुरक्षित हैं। जारी रखने के लिए पृष्ठ रीलोड करें।',
+  'error.reset': 'पृष्ठ रीलोड करें',
 }
 
 const dictionaries: Record<Language, Record<StringKey, string>> = { en, hi }
@@ -373,5 +385,54 @@ export const PROFILE_LABEL_I18N: Record<Language, Record<HealthProfile, string>>
     elder: 'वृद्ध',
     asthma: 'दमा',
     pregnancy: 'गर्भावस्था',
+  },
+}
+
+export const DWELLING_LABEL_I18N: Record<Language, Record<Dwelling, string>> = {
+  en: {
+    'one-room': 'One room',
+    apartment: 'Apartment',
+    house: 'Independent house',
+  },
+  hi: {
+    'one-room': 'एक कमरा',
+    apartment: 'फ़्लैट',
+    house: 'स्वतंत्र घर',
+  },
+}
+
+export const FUEL_LABEL_I18N: Record<Language, Record<Fuel, string>> = {
+  en: {
+    lpg: 'LPG cylinder',
+    biomass: 'Wood / biomass',
+    mixed: 'Both',
+    none: 'Electric only',
+  },
+  hi: {
+    lpg: 'LPG गैस',
+    biomass: 'लकड़ी / उपला',
+    mixed: 'दोनों',
+    none: 'केवल बिजली',
+  },
+}
+
+export const ROUTINE_LABEL_I18N: Record<Language, Record<string, string>> = {
+  en: {
+    walk: 'Morning walk',
+    school: 'School run',
+    commute: 'Commute to work',
+    lunch: 'Lunch outside',
+    play: 'Evening play',
+    cook: 'Cooking',
+    errand: 'Evening errand',
+  },
+  hi: {
+    walk: 'सुबह की सैर',
+    school: 'स्कूल आना-जाना',
+    commute: 'दफ़्तर सफ़र',
+    lunch: 'बाहर दोपहर भोजन',
+    play: 'शाम का खेल',
+    cook: 'खाना बनाना',
+    errand: 'शाम का काम',
   },
 }
