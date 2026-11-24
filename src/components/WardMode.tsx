@@ -5,6 +5,7 @@ import type { ExposureSample } from '../core/exposure'
 import { useApp } from '../state/app'
 import { fmt, fmtCompact, inr } from '../lib/format'
 import { Heatmap } from './Heatmap'
+import { PlateImage } from './PlateImage'
 
 /** Number of households represented on the illustrative ward block. */
 const WARD_HOUSEHOLDS = 480
@@ -115,15 +116,13 @@ export function WardMode() {
       <div className="plate-split">
         <div>
           <div className="plate" data-image-reveal>
-            <img
-              src="/img/ward-900.jpg"
-              srcSet="/img/ward-520.jpg 520w, /img/ward-900.jpg 900w, /img/ward-1600.jpg 1600w"
+            <PlateImage
+              name="ward"
               sizes="(max-width: 900px) 92vw, 46vw"
               width={900}
               height={859}
               alt="Low-rise houses and a tower block on the edge of Delhi, disappearing into November smog."
-              loading="lazy"
-              decoding="async"
+              lazy
             />
           </div>
           <div className="dotfield" data-reveal>

@@ -58,9 +58,9 @@ describe('reading the forecast', () => {
 describe('the clean window', () => {
   it('finds the afternoon dip, not the dawn peak', () => {
     const window = cleanestWindow(day(), 2)
-    expect(window).not.toBeNull()
-    expect(window!.startHour).toBeGreaterThanOrEqual(10)
-    expect(window!.meanPm25).toBeLessThan(140)
+    if (!window) throw new Error('expected clean window')
+    expect(window.startHour).toBeGreaterThanOrEqual(10)
+    expect(window.meanPm25).toBeLessThan(140)
   })
 
   it('returns null when the window cannot fit', () => {
@@ -70,36 +70,35 @@ describe('the clean window', () => {
 
 describe('routines', () => {
   const points = day()
+  const walk = DEFAULT_ROUTINES[0]
+  const cook = DEFAULT_ROUTINES.find((routine) => routine.place === 'indoor')
+  const fixed = DEFAULT_ROUTINES.find((routine) => !routine.movable)
+  if (!walk || !cook || !fixed) throw new Error('missing default routines')
 
   it('prices a routine by the air at its hour', () => {
-    const walk = DEFAULT_ROUTINES[0]!
     const early = routineDose({ ...walk, start: 6 }, points, 100)
     const late = routineDose({ ...walk, start: 13 }, points, 100)
     expect(early).toBeGreaterThan(late)
   })
 
   it('uses the indoor concentration for indoor routines', () => {
-    const cook = DEFAULT_ROUTINES.find((routine) => routine.place === 'indoor')!
     expect(routineDose(cook, points, 100)).toBeCloseTo(100 * cook.minutes * 0.012, 6)
   })
 
   it('clamps a move inside the day', () => {
-    const walk = DEFAULT_ROUTINES[0]!
     expect(moveRoutine(walk, -4).start).toBe(0)
     expect(moveRoutine(walk, 30).start).toBe(23.75)
   })
 
   it('suggests a cheaper hour and reports the saving', () => {
-    const walk = DEFAULT_ROUTINES[0]!
     const shift = bestShiftFor(walk, points, 100)
-    expect(shift).not.toBeNull()
-    expect(shift!.savedUg).toBeGreaterThan(0)
-    expect(shift!.start).toBeGreaterThanOrEqual(12)
+    if (!shift) throw new Error('expected shift suggestion')
+    expect(shift.savedUg).toBeGreaterThan(0)
+    expect(shift.start).toBeGreaterThanOrEqual(12)
   })
 
   it('never suggests moving an immovable routine', () => {
-    const cook = DEFAULT_ROUTINES.find((routine) => !routine.movable)!
-    expect(bestShiftFor(cook, points, 100)).toBeNull()
+    expect(bestShiftFor(fixed, points, 100)).toBeNull()
   })
 
   it('adds the day up', () => {
@@ -114,8 +113,9 @@ describe('routines', () => {
   it('fits movable routines inside the clean window without shifting immovable ones', () => {
     const clean = { startHour: 13, endHour: 15, meanPm25: 90 }
     const fitted = fitRoutinesInWindow(DEFAULT_ROUTINES, clean)
-    const cookBefore = DEFAULT_ROUTINES.find((routine) => !routine.movable)!
-    const cookAfter = fitted.find((routine) => !routine.movable)!
+    const cookBefore = DEFAULT_ROUTINES.find((routine) => !routine.movable)
+    const cookAfter = fitted.find((routine) => !routine.movable)
+    if (!cookBefore || !cookAfter) throw new Error('expected immovable routine')
     expect(cookAfter.start).toBe(cookBefore.start)
     for (const routine of fitted.filter((item) => item.movable)) {
       expect(routine.start).toBeGreaterThanOrEqual(clean.startHour)
@@ -188,9 +188,9 @@ describe('the ward scenario', () => {
 describe('school recess', () => {
   it('moves recess out of the morning peak', () => {
     const plan = schoolRecess(day(), 400, 10.5, 0.75)
-    expect(plan).not.toBeNull()
-    expect(plan!.best.startHour).toBeGreaterThan(10.5)
-    expect(plan!.savedUgPerDay).toBeGreaterThan(0)
+    if (!plan) throw new Error('expected recess plan')
+    expect(plan.best.startHour).toBeGreaterThan(10.5)
+    expect(plan.savedUgPerDay).toBeGreaterThan(0)
   })
 
   it('returns null without a forecast', () => {

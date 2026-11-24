@@ -1,5 +1,14 @@
 import { aqiCategory, CATEGORY_LABEL, PM25_BREAKPOINTS } from '../core/aqi'
+import { WHO_24H_PM25, WHO_DAILY_INHALED_UG } from '../core/dose'
+import {
+  CEILING_M,
+  COOKING_GENERATION_UG_PER_H,
+  INFILTRATION_ACH,
+  PENETRATION,
+} from '../core/indoor'
 import { MODES } from '../core/modes'
+import { HOUSEHOLD_FUEL } from '../core/ward'
+import { fmt } from '../lib/format'
 
 const BREAKPOINT_ROWS = PM25_BREAKPOINTS.map((bp) => [
   `${bp.cLow === 0 ? 0 : bp.cLow + 1}–${bp.cHigh}`,
@@ -91,13 +100,13 @@ export function Method() {
               <pre className="formula">
                 inhaled (µg) = concentration (µg/m³) × ventilation (m³/min) × minutes
                 <br />
-                budget (µg/day) = 15 × 1440 × 0.012 ≈ 259 µg
+                budget (µg/day) = {WHO_24H_PM25} × 1440 × 0.012 ≈ {fmt(WHO_DAILY_INHALED_UG)} µg
               </pre>
               <p>
                 The budget is what a healthy adult would inhale in a day if the air sat exactly at
-                the WHO 2021 24-hour guideline of 15 µg/m³. A child, an older adult, a person with
-                asthma or a pregnant person is given a smaller budget — a sensitivity factor between
-                0.7 and 0.9 — because the same physics carries different risk.
+                the WHO 2021 24-hour guideline of {WHO_24H_PM25} µg/m³. A child, an older adult, a
+                person with asthma or a pregnant person is given a smaller budget — a sensitivity
+                factor between 0.7 and 0.9 — because the same physics carries different risk.
               </p>
               <p>
                 Example: 187 µg/m³ for a 45-minute moderate walk is 187 × 45 × 0.025 ≈ 210 µg, about
@@ -111,17 +120,19 @@ export function Method() {
                 C_in = (P × C_out × ACH_inf + G / V) / (ACH_inf + CADR / V)
               </pre>
               <p>
-                P is the penetration factor for PM2.5 (0.8), ACH_inf is infiltration air changes per
-                hour (0.9 for a one-room home, 0.5 for an apartment, 0.35 for a sealed house), G is
-                indoor generation in µg/h and V is the room volume at a 2.7 m ceiling. A purifier is
-                just another air-change term: CADR divided by volume.
+                P is the penetration factor for PM2.5 ({PENETRATION}), ACH_inf is infiltration air
+                changes per hour ({INFILTRATION_ACH['one-room']} for a one-room home,{' '}
+                {INFILTRATION_ACH.apartment} for an apartment, {INFILTRATION_ACH.house} for a sealed
+                house), G is indoor generation in µg/h and V is the room volume at a {CEILING_M} m
+                ceiling. A purifier is just another air-change term: CADR divided by volume.
               </p>
               <p>
-                Cooking generation is 3,500 µg/h for LPG, 22,000 for biomass and 12,000 for a mixed
-                stove, applied for three hours a day. These are order-of-magnitude figures from
-                indoor air literature, not measurements of your kitchen. The model is there to rank
-                interventions correctly, which it does: the fuel switch dominates, filtration
-                second, sealing third.
+                Cooking generation is {fmt(COOKING_GENERATION_UG_PER_H.lpg)} µg/h for LPG,{' '}
+                {fmt(COOKING_GENERATION_UG_PER_H.biomass)} for biomass and{' '}
+                {fmt(COOKING_GENERATION_UG_PER_H.mixed)} for a mixed stove, applied for three hours
+                a day. These are order-of-magnitude figures from indoor air literature, not
+                measurements of your kitchen. The model is there to rank interventions correctly,
+                which it does: the fuel switch dominates, filtration second, sealing third.
               </p>
             </section>
 
@@ -154,10 +165,14 @@ export function Method() {
                 </tbody>
               </table>
               <p>
-                Fuel switching is accounted per household per year: biomass 4.5 kg of PM2.5 and
-                2,250 kg CO₂e; LPG 0.02 kg and 492 kg; induction 0.005 kg and 390 kg. Wood smoke
-                carries a high CO₂-equivalent because of methane and black carbon, which is why the
-                biomass figure is not zero even though the carbon is recent.
+                Fuel switching is accounted per household per year: biomass{' '}
+                {HOUSEHOLD_FUEL.biomass.pm25KgPerYear} kg of PM2.5 and{' '}
+                {fmt(HOUSEHOLD_FUEL.biomass.co2eKgPerYear)} kg CO₂e; LPG{' '}
+                {HOUSEHOLD_FUEL.lpg.pm25KgPerYear} kg and {fmt(HOUSEHOLD_FUEL.lpg.co2eKgPerYear)}{' '}
+                kg; induction {HOUSEHOLD_FUEL.induction.pm25KgPerYear} kg and{' '}
+                {fmt(HOUSEHOLD_FUEL.induction.co2eKgPerYear)} kg. Wood smoke carries a high
+                CO₂-equivalent because of methane and black carbon, which is why the biomass figure
+                is not zero even though the carbon is recent.
               </p>
             </section>
 

@@ -128,8 +128,9 @@ describe('ranked interventions', () => {
     const list = interventions(input)
     const corsi = list.find((item) => item.id === 'corsi')
     const purifier = list.find((item) => item.id === 'purifier')
-    expect(corsi?.costInr).toBe(CORSI_ROSENTHAL.costInr)
-    expect(corsi!.costInr).toBeLessThan(purifier!.costInr)
+    if (!corsi || !purifier) throw new Error('expected corsi and purifier interventions')
+    expect(corsi.costInr).toBe(CORSI_ROSENTHAL.costInr)
+    expect(corsi.costInr).toBeLessThan(purifier.costInr)
   })
 
   it('localizes intervention copy into Hindi when asked', () => {

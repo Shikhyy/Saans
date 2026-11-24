@@ -7,6 +7,7 @@ import { DWELLING_LABEL_I18N, FUEL_LABEL_I18N } from '../lib/i18n'
 import { supportsWebGL } from '../lib/webgl'
 import type { RoomScene } from '../three/RoomScene'
 import { fmt, hazeColor, inr } from '../lib/format'
+import { PlateImage } from './PlateImage'
 
 const DWELLINGS: Dwelling[] = ['one-room', 'apartment', 'house']
 const FUELS: Fuel[] = ['lpg', 'biomass', 'mixed', 'none']
@@ -94,15 +95,13 @@ export function HomeLab() {
             <h3 data-reveal-item>{t('home.rowOne')}</h3>
             <div className="row-block__body">
               <div className="row-block__media" data-image-reveal>
-                <img
-                  src="/img/chulha-900.jpg"
-                  srcSet="/img/chulha-520.jpg 520w, /img/chulha-900.jpg 900w, /img/chulha-1600.jpg 1600w"
+                <PlateImage
+                  name="chulha"
                   sizes="(max-width: 980px) 90vw, 220px"
                   width={900}
                   height={600}
                   alt="A cooking pot on an earthen chulha, lit with twigs, in a North Indian home."
-                  loading="lazy"
-                  decoding="async"
+                  lazy
                 />
               </div>
               <div data-reveal-item>

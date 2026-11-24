@@ -1,4 +1,5 @@
 import { useApp } from '../state/app'
+import { PlateImage } from './PlateImage'
 
 export interface FooterProps {
   navigate: (to: string) => void
@@ -23,15 +24,13 @@ export function Footer({ navigate }: FooterProps) {
   return (
     <footer className="footer">
       <div className="footer__plate">
-        <img
-          src="/img/tomb-900.jpg"
-          srcSet="/img/tomb-520.jpg 520w, /img/tomb-900.jpg 900w, /img/tomb-1600.jpg 1600w"
+        <PlateImage
+          name="tomb"
           sizes="(max-width: 900px) 100vw, 50vw"
           width={900}
           height={600}
           alt="Humayun’s Tomb in Delhi behind palm trees on a foggy winter morning."
-          loading="lazy"
-          decoding="async"
+          lazy
         />
       </div>
 

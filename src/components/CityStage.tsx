@@ -5,10 +5,11 @@ import { useReducedMotion } from '../lib/hooks'
 import { supportsWebGL } from '../lib/webgl'
 import { useApp } from '../state/app'
 import type { CityScene, Quality } from '../three/CityScene'
+import { PlateImage } from './PlateImage'
 
 function detectQuality(): Quality {
   const cores = navigator.hardwareConcurrency ?? 4
-  const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 4
+  const memory = navigator.deviceMemory ?? 4
   if (cores >= 8 && memory >= 8 && window.innerWidth > 1100) return 'high'
   if (cores >= 4 && window.innerWidth > 700) return 'medium'
   return 'low'
@@ -27,7 +28,6 @@ export function CityStage() {
   const hourRef = useRef<HTMLSpanElement | null>(null)
   const pmRef = useRef<HTMLSpanElement | null>(null)
   const layerRef = useRef<HTMLSpanElement | null>(null)
-  const progressRef = useRef(0)
   const clockRef = useRef(17)
   const pmValueRef = useRef(pm25)
   const pointsRef = useRef(today?.points ?? [])
@@ -50,7 +50,6 @@ export function CityStage() {
       const rect = split.getBoundingClientRect()
       const span = Math.max(1, rect.height - window.innerHeight)
       const progress = clamp(-rect.top / span, 0, 1)
-      progressRef.current = progress
       const hour = 5 + progress * 19
       clockRef.current = hour
 
@@ -128,9 +127,8 @@ export function CityStage() {
       <div className="stage__view">
         {failed ? (
           <div className="stage__fallback">
-            <img
-              src="/img/lamp-900.jpg"
-              srcSet="/img/lamp-520.jpg 520w, /img/lamp-900.jpg 900w, /img/lamp-1600.jpg 1600w"
+            <PlateImage
+              name="lamp"
               sizes="(max-width: 900px) 100vw, 46vw"
               width={1600}
               height={1200}
@@ -141,15 +139,13 @@ export function CityStage() {
           <canvas ref={canvasRef} aria-hidden="true" />
         )}
         <div className="stage__plate" ref={plateRef} aria-hidden="true">
-          <img
-            src="/img/lamp-900.jpg"
-            srcSet="/img/lamp-520.jpg 520w, /img/lamp-900.jpg 900w, /img/lamp-1600.jpg 1600w"
+          <PlateImage
+            name="lamp"
             sizes="(max-width: 900px) 100vw, 46vw"
             width={1600}
             height={1200}
             alt=""
-            loading="lazy"
-            decoding="async"
+            lazy
           />
         </div>
       </div>

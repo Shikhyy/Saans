@@ -14,7 +14,11 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
+      '@typescript-eslint/no-non-null-assertion': 'error',
       'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-useless-return': 'error',
+      'object-shorthand': 'error',
+      'prefer-template': 'error',
       eqeqeq: ['error', 'smart'],
       'prefer-const': 'error',
     },

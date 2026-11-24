@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { fmt } from '../lib/format'
 import { useSharePlan } from '../lib/useSharePlan'
 import { useApp } from '../state/app'
+import { PlateImage } from './PlateImage'
 
 export function Close() {
   const { t, profile, dose } = useApp()
@@ -15,16 +16,15 @@ export function Close() {
 
   return (
     <section className="close" aria-labelledby="close-title" data-parallax-section>
-      <img
-        src="/img/lamp-1600.jpg"
-        srcSet="/img/lamp-520.jpg 520w, /img/lamp-900.jpg 900w, /img/lamp-1600.jpg 1600w"
+      <PlateImage
+        name="lamp"
+        defaultSize={1600}
         sizes="100vw"
         width={1600}
         height={1200}
         alt="A sodium street lamp burning through the smog on a Delhi night, the air thick around it."
-        loading="lazy"
-        decoding="async"
-        data-parallax="0.1"
+        lazy
+        parallax="0.1"
       />
       <div className="close__inner">
         <p className="close__caption" data-reveal>

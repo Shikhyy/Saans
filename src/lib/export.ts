@@ -181,13 +181,9 @@ export async function shareCard(options: CardOptions): Promise<'shared' | 'downl
   const blob = await buildShareCard(options)
   if (!blob) return 'failed'
   const file = new File([blob], 'saans-plan.png', { type: 'image/png' })
-  const nav = navigator as Navigator & {
-    canShare?: (data: { files: File[] }) => boolean
-    share?: (data: { files: File[]; title: string; text: string }) => Promise<void>
-  }
-  if (nav.canShare?.({ files: [file] }) && nav.share) {
+  if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
     try {
-      await nav.share({ files: [file], title: 'SAANS plan', text: options.headline })
+      await navigator.share({ files: [file], title: 'SAANS plan', text: options.headline })
       return 'shared'
     } catch {
       return 'failed'
