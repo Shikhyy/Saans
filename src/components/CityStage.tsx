@@ -151,12 +151,11 @@ export function CityStage() {
             />
           </div>
         ) : (
-          <canvas ref={canvasRef} style={{ touchAction: 'pan-y' }} />
+          <canvas ref={canvasRef} />
         )}
         <div
           className="stage__plate"
           ref={plateRef}
-          style={{ transition: 'opacity 1600ms ease' }}
           aria-hidden="true"
         >
           <img

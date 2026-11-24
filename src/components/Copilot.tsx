@@ -63,7 +63,7 @@ export function Copilot() {
             {planStatus === 'loading' ? t('plan.generating') : t('plan.generate')}
           </button>
 
-          <table className="facts" style={{ marginTop: 28 }} data-reveal-item>
+          <table className="facts" data-reveal-item>
             <caption className="sr-only">{t('plan.given')}</caption>
             <tbody>
               {given.map(([label, value]) => (
@@ -75,7 +75,7 @@ export function Copilot() {
             </tbody>
           </table>
 
-          <p className="note" style={{ marginTop: 18 }} data-reveal-item>
+          <p className="note" data-reveal-item>
             {t('plan.givenNote')}
           </p>
         </div>

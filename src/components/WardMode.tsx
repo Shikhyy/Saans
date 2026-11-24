@@ -111,18 +111,10 @@ export function WardMode() {
           <div className="dotfield" data-reveal>
             <DotField switched={switched} />
           </div>
-          <div style={{ marginTop: 18 }}>
-            <Heatmap samples={heatmapSamples} lat={profile.latitude} lon={profile.longitude} hours={heatmapHours} />
-          </div>
-          <p className="note" style={{ marginTop: 12 }}>
-            {t('ward.heatmap')}
-          </p>
-          <p className="note" style={{ marginTop: 6 }}>
-            {t('ward.heatmapNote')}
-          </p>
-          <p className="note" style={{ marginTop: 12 }}>
-            {tf('ward.households', { count: fmt(HOUSEHOLDS), wood: fmt(BIOMASS_COUNT) })}
-          </p>
+          <Heatmap samples={heatmapSamples} lat={profile.latitude} lon={profile.longitude} hours={heatmapHours} />
+          <p className="note">{t('ward.heatmap')}</p>
+          <p className="note">{t('ward.heatmapNote')}</p>
+          <p className="note">{tf('ward.households', { count: fmt(HOUSEHOLDS), wood: fmt(BIOMASS_COUNT) })}</p>
         </div>
 
         <div className="ward__controls" data-reveal-group>
@@ -185,10 +177,10 @@ export function WardMode() {
               <div className="recess__time num">
                 {formatHour(recess.best.startHour)}–{formatHour(recess.best.endHour)}
               </div>
-              <p className="note" style={{ marginTop: 10 }}>
+              <p className="note">
                 {t('ward.recess')} · {t('ward.recessNote')}
               </p>
-              <p className="note" style={{ marginTop: 10 }}>
+              <p className="note">
                 {tf('ward.recessBody', {
                   current: fmt(recess.currentMean),
                   best: fmt(recess.bestMean),

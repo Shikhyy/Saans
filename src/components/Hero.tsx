@@ -1,6 +1,6 @@
 import { CATEGORY_LABEL, whoMultiple } from '../core/aqi'
 import type { AqiCategory } from '../core/types'
-import { fmt } from '../lib/format'
+import { aqiVar, fmt } from '../lib/format'
 import { useApp } from '../state/app'
 
 const DOMINANT_LABEL: Record<string, string> = {
@@ -46,7 +46,7 @@ export function Hero({ onPlan }: { onPlan: () => void }) {
           <span
             className="hero__band"
             aria-hidden="true"
-            style={{ background: `var(--aqi-${category})` }}
+            style={{ background: aqiVar(category) }}
           />
           {tf('hero.now', {
             city: profile.city,
@@ -59,9 +59,7 @@ export function Hero({ onPlan }: { onPlan: () => void }) {
       </div>
 
       {(air?.sample || status === 'loading') && (
-        <p className="note" style={{ marginTop: 20 }}>
-          {status === 'loading' ? t('hero.loading') : t('hero.sample')}
-        </p>
+        <p className="note">{status === 'loading' ? t('hero.loading') : t('hero.sample')}</p>
       )}
     </section>
   )

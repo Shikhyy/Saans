@@ -107,7 +107,7 @@ export function CityDialog({ onClose }: { onClose: () => void }) {
         aria-labelledby="city-dialog-title"
         ref={panelRef}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 16 }}>
+        <div className="dialog__head">
           <h2 className="dialog__title" id="city-dialog-title">
             {t('nav.city')}
           </h2>
@@ -116,9 +116,7 @@ export function CityDialog({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <p className="note" style={{ marginBottom: 14 }}>
-          Currently reading the forecast for {profile.city}.
-        </p>
+        <p className="note">Currently reading the forecast for {profile.city}.</p>
 
         <form
           className="search"
@@ -166,7 +164,7 @@ export function CityDialog({ onClose }: { onClose: () => void }) {
           ))}
         </div>
 
-        <p className="note" style={{ marginTop: 18 }}>
+        <p className="note">
           Search runs through this server against Open-Meteo Geocoding. The browser sends the word
           you type and nothing else.
         </p>
