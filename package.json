@@ -32,7 +32,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@eslint/js": "^9.39.5",
     "@fontsource-variable/inter-tight": "^5.1.0",
     "@fontsource/instrument-serif": "^5.1.0",
     "@fontsource/mukta": "^5.1.0",
